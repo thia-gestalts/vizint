@@ -1,0 +1,34 @@
+#plot {
+  display: block;
+  width: 100%;
+  border-radius: .65rem;
+  background: #f6f8ff;
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+.grid, .prediction, .error { fill: none; vector-effect: non-scaling-stroke; }
+.grid { stroke: #c2cee7; }
+.prediction { stroke: #344dc9; stroke-width: 2; }
+.prediction-label { fill: #344dc9; text-anchor: end; font-weight: 600; }
+.tick { fill: #4f607c; text-anchor: end; dominant-baseline: central; }
+.point-label { fill: #4f607c; text-anchor: middle; }
+.error { stroke: #a04c00; stroke-width: 2; stroke-dasharray: 4 3; }
+.handle { cursor: grab; }
+.handle:active { cursor: grabbing; }
+.handle:focus-visible { outline: none; }
+.handle circle {
+  fill: #fff;
+  stroke: #344dc9;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+  touch-action: none;
+}
+.handle:focus-visible circle { stroke: #a04c00; stroke-width: 3; }
+.handle text {
+  fill: #17253c;
+  text-anchor: middle;
+  dominant-baseline: central;
+  font-weight: 600;
+  pointer-events: none;
+}
+.calculation { margin: .75rem 0 0; font-size: 1.125rem; font-variant-numeric: tabular-nums; }

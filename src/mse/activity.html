@@ -1,0 +1,32 @@
+<svg id="plot" viewBox="0 0 480 244" role="group" aria-label="Three observed values and a prediction of 5">
+  <g aria-hidden="true">
+    <path class="grid" d="M48 38H456 M48 198H456"/>
+    <path class="prediction" d="M48 118H456"/>
+    <text class="tick" x="38" y="38">10</text>
+    <text class="tick" x="38" y="118">5</text>
+    <text class="tick" x="38" y="198">0</text>
+    <text class="prediction-label" x="456" y="18">Prediction = 5</text>
+    <line class="error" x1="114" x2="114" y2="118"/>
+    <line class="error" x1="252" x2="252" y2="118"/>
+    <line class="error" x1="390" x2="390" y2="118"/>
+    <text class="point-label" x="114" y="235">A</text>
+    <text class="point-label" x="252" y="235">B</text>
+    <text class="point-label" x="390" y="235">C</text>
+  </g>
+  <g class="handle" data-x="114" tabindex="0" role="slider" aria-label="Observed value A"
+     aria-orientation="vertical" aria-valuemin="0" aria-valuemax="10" aria-valuenow="8">
+    <circle r="17"/>
+    <text aria-hidden="true"></text>
+  </g>
+  <g class="handle" data-x="252" tabindex="0" role="slider" aria-label="Observed value B"
+     aria-orientation="vertical" aria-valuemin="0" aria-valuemax="10" aria-valuenow="3">
+    <circle r="17"/>
+    <text aria-hidden="true"></text>
+  </g>
+  <g class="handle" data-x="390" tabindex="0" role="slider" aria-label="Observed value C"
+     aria-orientation="vertical" aria-valuemin="0" aria-valuemax="10" aria-valuenow="6">
+    <circle r="17"/>
+    <text aria-hidden="true"></text>
+  </g>
+</svg>
+<p class="calculation"><strong>MSE</strong> = <output id="calculation"></output></p>

@@ -121,7 +121,7 @@ await writeFile(new URL('index.html', output), page('Vizint', '', `
   </div>`));
 
 for (const entry of entries) {
-  const { slug, title, intro, source } = entry;
+  const { slug, title, intro, source, frameHeight } = entry;
   const markup = await read(`src/${slug}/activity.html`);
   const code = await read(`src/${slug}/activity.js`);
   const styles = await read(`src/${slug}/activity.css`);
@@ -134,17 +134,16 @@ for (const entry of entries) {
 <body>${markup}<script>${code.replace(/<\/script/gi, '<\\/script')}</script></body></html>`;
   const path = new URL(`${slug}/`, output);
   await mkdir(path);
-  const height = slug === 'bezier' ? 'h-[calc(clamp(0px,50vw-1rem,27rem)+6rem)]' : 'h-84';
   await writeFile(new URL('index.html', path), page(`${title} | Vizint`, '../', `
     <a class="btn btn-ghost btn-sm -ml-2" href="../">${icon('arrow-left')} All activities</a>
     <h1 class="mt-3 text-3xl leading-tight font-semibold tracking-tight sm:text-5xl">${escapeHTML(title)}</h1>
     <p class="mt-3 max-w-prose leading-relaxed text-base-content/75">${escapeHTML(intro)}</p>
-    <template id="activity-template"><iframe class="block w-full rounded-xl border border-base-300 bg-base-100 ${height}" title="${escapeHTML(title)}" sandbox="allow-scripts" srcdoc="${escapeHTML(frame)}"></iframe></template>
+    <template id="activity-template"><iframe class="block w-full rounded-xl border border-base-300 bg-base-100" style="height: ${escapeHTML(frameHeight)}" title="${escapeHTML(title)}" sandbox="allow-scripts" srcdoc="${escapeHTML(frame)}"></iframe></template>
     <div id="activity" class="mt-6" data-entry="${slug}"></div>
     <noscript><p class="alert alert-info">Enable JavaScript to use this activity.</p></noscript>
     <p id="save-status" class="text-sm text-base-content/75 not-empty:mt-3" role="status"></p>
     <button class="btn btn-outline btn-sm mt-2" type="button" id="retry" hidden>${icon('rotate-ccw')} Retry saving</button>
-    <footer class="mt-5 text-sm text-base-content/75">${escapeHTML(source)}</footer>`, '<script type="module" src="../host.mjs"></script>'));
+    ${source ? `<footer class="mt-5 text-sm text-base-content/75">${escapeHTML(source)}</footer>` : ''}`, '<script type="module" src="../host.mjs"></script>'));
 }
 
 console.log(`Built ${entries.length} entries for ${app} with schemas pinned to ${pin.commit}.`);
