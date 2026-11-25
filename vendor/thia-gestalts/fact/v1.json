@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://thia.example/gestalts/fact/v1.json",
+  "title": "Fact",
+  "description": "Declarative knowledge a learner can practise.",
+  "$ref": "../common/v1.json#/$defs/recordIdentity",
+  "required": ["statement"],
+  "properties": {
+    "kind": { "const": "fact" },
+    "statement": {
+      "type": "string",
+      "minLength": 1,
+      "examples": ["The two nearest multiples of ten to 47 are 40 and 50."]
+    }
+  },
+  "unevaluatedProperties": false
+}

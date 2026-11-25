@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://thia.example/gestalts/artifact/v1.json",
+  "title": "Artifact",
+  "description": "A named work or object. Multiple app-owned academic entries can each reference the same artifact.",
+  "$ref": "../common/v1.json#/$defs/recordIdentity",
+  "required": ["name"],
+  "properties": {
+    "kind": { "const": "artifact" },
+    "name": { "$ref": "../common/v1.json#/$defs/displayName", "examples": ["Curve Sketchbook"] }
+  },
+  "unevaluatedProperties": false
+}

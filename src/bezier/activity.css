@@ -1,0 +1,21 @@
+#plot {
+  display: block;
+  width: 100%;
+  background-color: #f6f8ff;
+  background-image: radial-gradient(#c2cee7 1px, transparent 1px);
+  background-size: 18px 18px;
+  border-radius: .65rem;
+  overflow: visible;
+}
+path { fill: none; vector-effect: non-scaling-stroke; }
+.polygon { stroke: #6a7b97; stroke-dasharray: 5 5; }
+.curve { stroke: #9caccc; stroke-width: 2; }
+.trace { stroke: #344dc9; stroke-width: 3; }
+.level-one { stroke: #007f75; fill: #007f75; }
+.level-two { stroke: #ab5416; fill: #ab5416; }
+path.level-one, path.level-two { fill: none; stroke-width: 1.5; }
+#curve-point { fill: #344dc9; stroke: white; stroke-width: 2; }
+#handles circle { fill: #fff; stroke: #536a99; stroke-width: 3; cursor: grab; touch-action: none; }
+#handles circle:active { cursor: grabbing; }
+label { display: block; margin-top: .6rem; font-variant-numeric: tabular-nums; }
+input { display: block; width: 100%; margin: .3rem 0 0; accent-color: #344dc9; }

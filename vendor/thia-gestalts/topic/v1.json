@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://thia.example/gestalts/topic/v1.json",
+  "title": "Topic",
+  "description": "A named subject for connecting activities and records. Consumers can create topics locally by name.",
+  "$ref": "../common/v1.json#/$defs/recordIdentity",
+  "required": ["name"],
+  "properties": {
+    "kind": { "const": "topic" },
+    "name": { "$ref": "../common/v1.json#/$defs/displayName", "examples": ["Bézier Curves"] }
+  },
+  "unevaluatedProperties": false
+}

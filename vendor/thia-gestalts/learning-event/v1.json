@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://thia.example/gestalts/learning-event/v1.json",
+  "title": "Learning event",
+  "description": "One observed interaction. Mint a UUID per occurrence and reuse it across delivery retries.",
+  "$ref": "../common/v1.json#/$defs/recordIdentity",
+  "required": ["type", "occurredAtMs", "origin", "targets"],
+  "properties": {
+    "kind": { "const": "learning-event" },
+    "type": {
+      "enum": ["engagement", "attempt"],
+      "description": "An engagement records an interaction. An attempt records practice of at least one fact or skill."
+    },
+    "occurredAtMs": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991,
+      "description": "Time of the occurrence as Unix epoch milliseconds in UTC, within the interoperable JSON integer range."
+    },
+    "origin": {
+      "type": "object",
+      "required": ["app", "activity"],
+      "additionalProperties": false,
+      "properties": {
+        "app": { "$ref": "../common/v1.json#/$defs/namespace" },
+        "activity": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable source activity identifier within the app, retained for provenance and corrections."
+        }
+      }
+    },
+    "targets": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "description": "Records addressed by the interaction. Topics supply context and facts or skills identify learning targets.",
+      "items": { "$ref": "../common/v1.json#/$defs/recordReference" }
+    },
+    "score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Optional normalized result for the whole attempt. Zero is a measured result. Omit score when unscored.",
+      "examples": [0, 0.5, 1]
+    }
+  },
+  "if": { "properties": { "type": { "const": "attempt" } } },
+  "then": {
+    "properties": {
+      "targets": {
+        "contains": {
+          "type": "object",
+          "required": ["kind"],
+          "properties": { "kind": { "enum": ["fact", "skill"] } }
+        }
+      }
+    }
+  },
+  "else": { "properties": { "score": false } },
+  "unevaluatedProperties": false
+}

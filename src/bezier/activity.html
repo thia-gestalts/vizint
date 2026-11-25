@@ -1,0 +1,17 @@
+<svg id="plot" viewBox="0 0 640 320" role="group" aria-label="Cubic Bézier curve and draggable control points">
+  <path id="polygon" class="polygon"/>
+  <path id="curve" class="curve"/>
+  <path id="level-one" class="level-one"/>
+  <path id="level-two" class="level-two"/>
+  <path id="trace" class="trace"/>
+  <g id="interpolated" aria-hidden="true"></g>
+  <circle id="curve-point" r="7"/>
+  <g id="handles">
+    <circle r="11" tabindex="0" aria-label="Start point P0. Use arrow keys to move."/>
+    <circle r="11" tabindex="0" aria-label="Control point P1. Use arrow keys to move."/>
+    <circle r="11" tabindex="0" aria-label="Control point P2. Use arrow keys to move."/>
+    <circle r="11" tabindex="0" aria-label="End point P3. Use arrow keys to move."/>
+  </g>
+</svg>
+<label for="parameter"><var>t</var> <output id="parameter-value" for="parameter"></output></label>
+<input id="parameter" type="range" min="0" max="1" value="0.35" step="0.01">

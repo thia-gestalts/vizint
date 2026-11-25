@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://thia.example/gestalts/skill/v1.json",
+  "title": "Skill",
+  "description": "A procedural or perceptual ability a learner can practise.",
+  "$ref": "../common/v1.json#/$defs/recordIdentity",
+  "required": ["name"],
+  "properties": {
+    "kind": { "const": "skill" },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Display name. Skill identity comes from the id.",
+      "examples": ["Round to the nearest ten"]
+    }
+  },
+  "unevaluatedProperties": false
+}

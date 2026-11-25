@@ -1,0 +1,13 @@
+{
+  "source": "../thia-gestalts",
+  "commit": "527c6982b508f9a6f873fdc47d5e2700dcfdad66",
+  "sha256": {
+    "artifact/v1.json": "263a8e0f96a5b0c440902b59278d1e00ecf106fa361f47f393ee099592c37470",
+    "common/v1.json": "01b45e85f6cfe5235d07944482b9c2af420f9c114ec616fc1d9dbcdc35d19a93",
+    "fact/v1.json": "853f8568144acc5be3bf2c5c57880b1de4db909558b54b46bd2f538f16d2cb1c",
+    "learning-event/v1.json": "b531a7a1d8044e81f8d7a7c5dbe94aa93bc69a80be853ca0df278fa577cc1b31",
+    "note/v1.json": "1ab2abe4d31e1cdf46d7460ee9072e9ef4ca42bde907fa5526970b75fc79ce6a",
+    "skill/v1.json": "ba2dc158e0ae0a1c854e5f8dd7b3fcea11b79c99d5199924be32df7508cc9c4c",
+    "topic/v1.json": "4d6d7708d5b84277134a8db1982892e030c2317265faf13eef053f04f032f047"
+  }
+}
