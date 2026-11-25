@@ -121,9 +121,12 @@ await writeFile(new URL('index.html', output), page('Vizint', '', `
   </div>`));
 
 for (const entry of entries) {
-  const { slug, title, intro, source, frameHeight } = entry;
+  const { slug, title, intro, source, frameHeight, sharedScript } = entry;
   const markup = await read(`src/${slug}/activity.html`);
-  const code = await read(`src/${slug}/activity.js`);
+  const code = await Promise.all([
+    sharedScript ? read(sharedScript) : '',
+    read(`src/${slug}/activity.js`),
+  ]);
   const styles = await read(`src/${slug}/activity.css`);
   const common = await read('src/frame.css');
   // Activity scripts exist only inside the sandboxed document in the output.
@@ -131,7 +134,7 @@ for (const entry of entries) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; form-action 'none'; base-uri 'none'">
 <title>${escapeHTML(title)}</title><style>${common}\n${styles}</style></head>
-<body>${markup}<script>${code.replace(/<\/script/gi, '<\\/script')}</script></body></html>`;
+<body>${markup}<script>${code.join('\n').replace(/<\/script/gi, '<\\/script')}</script></body></html>`;
   const path = new URL(`${slug}/`, output);
   await mkdir(path);
   await writeFile(new URL('index.html', path), page(`${title} | Vizint`, '../', `

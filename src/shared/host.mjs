@@ -5,7 +5,6 @@ import { saveObservation } from './storage.mjs';
 const mount = document.querySelector('#activity');
 const entry = entries.find(({ slug }) => slug === mount.dataset.entry);
 const frame = document.querySelector('#activity-template').content.firstElementChild.cloneNode();
-const status = document.querySelector('#save-status');
 const retry = document.querySelector('#retry');
 let question;
 let observation;
@@ -27,16 +26,11 @@ async function persist() {
   if (saving || saved) return;
   saving = true;
   retry.hidden = true;
-  status.textContent = 'Saving on this device…';
   try {
     await saveObservation(observation, [entry.target]);
     saved = true;
-    status.textContent = entry.type === 'attempt'
-      ? 'Practice attempt saved on this device.'
-      : 'Exploration saved on this device.';
     if (question) send({ type: 'saved', id: question.id });
   } catch {
-    status.textContent = 'Could not save on this device.';
     retry.hidden = false;
   } finally {
     saving = false;

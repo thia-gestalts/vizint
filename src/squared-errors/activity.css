@@ -1,0 +1,39 @@
+#plot {
+  display: block;
+  width: 100%;
+  border-radius: .65rem;
+  background: #f6f8ff;
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+.handle { cursor: grab; }
+.handle:active { cursor: grabbing; }
+.handle:focus-visible { outline: none; }
+.handle circle {
+  fill: #fff;
+  stroke: #344dc9;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+  touch-action: none;
+}
+.handle:focus-visible circle { stroke: #a04c00; stroke-width: 3; }
+.handle text {
+  fill: #17253c;
+  text-anchor: middle;
+  dominant-baseline: central;
+  font-weight: 600;
+  pointer-events: none;
+}
+.truth { stroke: #344dc9; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.truth-label { fill: #344dc9; text-anchor: end; font-weight: 600; }
+.square { fill: #ffdbb4; fill-opacity: .55; stroke: #a04c00; vector-effect: non-scaling-stroke; }
+.error { stroke: #a04c00; stroke-width: 2; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; }
+.point-label { fill: #4f607c; text-anchor: middle; }
+.results {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: .25rem;
+  margin-top: .75rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}

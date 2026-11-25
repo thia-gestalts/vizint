@@ -1,6 +1,7 @@
 export const app = 'example.thia.vizint';
 
 const plotFrameHeight = 'calc(clamp(0px, 50vw - 1rem, 27rem) + 6rem)';
+const verticalPointDrag = 'src/vertical-point-drag.js';
 
 export const entries = [
   {
@@ -21,6 +22,7 @@ export const entries = [
     slug: 'mse',
     activity: 'mean-squared-error',
     frameHeight: plotFrameHeight,
+    sharedScript: verticalPointDrag,
     title: 'Mean squared error (MSE)',
     intro: 'Drag the three points up or down. Each dashed segment shows the distance to the prediction. Square those distances and average them to get the MSE.',
     type: 'engagement',
@@ -28,6 +30,20 @@ export const entries = [
       kind: 'topic',
       id: 'name:6d65616e2073717561726564206572726f72',
       name: 'Mean Squared Error',
+    },
+  },
+  {
+    slug: 'squared-errors',
+    activity: 'squared-errors',
+    frameHeight: plotFrameHeight,
+    sharedScript: verticalPointDrag,
+    title: 'Squared errors',
+    intro: 'Drag the three points up or down. The vertical gap to the truth line forms one side of each square. Its area is the squared error for that point.',
+    type: 'engagement',
+    target: {
+      kind: 'topic',
+      id: 'name:73717561726564206572726f72',
+      name: 'Squared Error',
     },
   },
   {

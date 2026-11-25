@@ -1,0 +1,32 @@
+<svg id="plot" viewBox="0 0 480 244" role="group" aria-label="Three observed values and their error squares against a sloped truth line">
+  <g aria-hidden="true">
+    <rect class="square" x="45"/>
+    <rect class="square" x="175"/>
+    <rect class="square" x="305"/>
+    <path class="truth" d="M19 156.4L435 54"/>
+    <text class="truth-label" x="448" y="30">Truth line</text>
+    <line class="error" x1="45" x2="45"/>
+    <line class="error" x1="175" x2="175"/>
+    <line class="error" x1="305" x2="305"/>
+    <text class="point-label" x="45" y="235">A</text>
+    <text class="point-label" x="175" y="235">B</text>
+    <text class="point-label" x="305" y="235">C</text>
+  </g>
+  <g class="handle" data-x="45" data-truth="3" tabindex="0" role="slider" aria-label="Observed value A"
+     aria-orientation="vertical" aria-valuemin="0" aria-valuemax="10" aria-valuenow="7">
+    <circle r="17"/><text aria-hidden="true"></text>
+  </g>
+  <g class="handle" data-x="175" data-truth="5" tabindex="0" role="slider" aria-label="Observed value B"
+     aria-orientation="vertical" aria-valuemin="0" aria-valuemax="10" aria-valuenow="2">
+    <circle r="17"/><text aria-hidden="true"></text>
+  </g>
+  <g class="handle" data-x="305" data-truth="7" tabindex="0" role="slider" aria-label="Observed value C"
+     aria-orientation="vertical" aria-valuemin="0" aria-valuemax="10" aria-valuenow="9">
+    <circle r="17"/><text aria-hidden="true"></text>
+  </g>
+</svg>
+<div class="results">
+  <div><strong>A</strong> <output aria-label="Squared error A"></output></div>
+  <div><strong>B</strong> <output aria-label="Squared error B"></output></div>
+  <div><strong>C</strong> <output aria-label="Squared error C"></output></div>
+</div>
