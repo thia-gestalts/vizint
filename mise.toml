@@ -2,8 +2,8 @@
 node = "26"
 
 [tasks.setup]
-description = "Build Vizint using the vendored dependencies"
-run = "npm run build"
+description = "Install build dependencies and build Vizint"
+run = ["npm ci", "npm run build"]
 
 [tasks.dev]
 description = "Build and serve Vizint locally"

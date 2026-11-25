@@ -1,0 +1,7 @@
+@import "tailwindcss" source(none);
+@source "../scripts/build.mjs";
+@source "./shared/account.mjs";
+
+@plugin "daisyui" {
+  themes: corporate --default;
+}

@@ -3,7 +3,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node scripts/build.mjs",
+    "build": "node scripts/build.mjs && tailwindcss -i src/site.css -o dist/site.css --minify",
     "start": "node scripts/serve.mjs"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.5",
+    "daisyui": "^5.8.2",
+    "lucide-static": "^1.80.0",
+    "tailwindcss": "^4.3.5"
   }
 }
