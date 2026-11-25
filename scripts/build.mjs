@@ -28,10 +28,19 @@ function page(title, prefix, body, script = '') {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${escapeHTML(title)}</title>
   <link rel="stylesheet" href="${prefix}site.css">
+  <script type="module" src="${prefix}account.mjs"></script>
   ${script}
 </head>
 <body>
-  <header><nav aria-label="Main"><a href="${prefix || './'}">Vizint</a></nav></header>
+  <header><nav aria-label="Main"><a href="${prefix || './'}">Vizint</a></nav>
+    <form id="olymp-account">
+      <label>Login name <input name="name" required autocomplete="username"></label>
+      <label>Password <input name="password" type="password" required autocomplete="current-password"></label>
+      <button>Sign in</button> <button value="create">Create account</button>
+      <small>Signed-out practice stays on this device.</small>
+    </form>
+    <span id="olymp-status" role="status"></span><span id="olymp-error" role="alert"></span>
+  </header>
   <main>${body}</main>
 </body>
 </html>
@@ -40,6 +49,7 @@ function page(title, prefix, body, script = '') {
 
 await rm(output, { recursive: true, force: true });
 await mkdir(output);
+await import('./olymp.mjs');
 await cp(new URL('src/shared/', root), output, { recursive: true });
 await cp(new URL('src/catalog.mjs', root), new URL('catalog.mjs', output));
 await cp(new URL(vendor, root), new URL('schemas/', output), { recursive: true });
