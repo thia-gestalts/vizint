@@ -116,13 +116,13 @@ for (const entry of entries) {
   const exercises = learning?.exercises ?? [];
   const activeExercise = !entry.customHost && type === 'attempt' ? exercises[0] : undefined;
   const links = graph.byActivity.get(activity);
-  const markup = await read(`src/${slug}/activity.html`);
+  const markup = await read(`src/views/${slug}/activity.html`);
   const bundle = async (filename, format, external = []) => (await build({
-    entryPoints: [fileURLToPath(new URL(`src/${slug}/${filename}`, root))],
+    entryPoints: [fileURLToPath(new URL(`src/views/${slug}/${filename}`, root))],
     bundle: true, format, external, write: false, minify: true, legalComments: 'inline',
   })).outputFiles[0].text;
   const code = entry.customHost ? await bundle('activity.js', 'iife') : (await readActivityScript(entry)).source;
-  const styles = await read(`src/${slug}/activity.css`);
+  const styles = await read(`src/views/${slug}/activity.css`);
   const common = await read('src/frame.css');
   // Activity scripts exist only inside the sandboxed document in the output.
   const frame = `<!doctype html><html lang="en"><head><meta charset="utf-8">
@@ -132,12 +132,12 @@ for (const entry of entries) {
 <body>${markup}<script>${code.replace(/<\/script/gi, '<\\/script')}</script></body></html>`;
   const path = new URL(`${slug}/`, output);
   await mkdir(path);
-  const folder = new URL(`src/${slug}/`, root);
+  const folder = new URL(`src/views/${slug}/`, root);
   if ((await readdir(folder)).includes('preview.png')) {
     await cp(new URL('preview.png', folder), new URL('preview.png', path));
     previews.add(slug);
   }
-  if (entry.assets) await cp(new URL(`src/${slug}/${entry.assets}/`, root), new URL(`${entry.assets}/`, path), { recursive: true });
+  if (entry.assets) await cp(new URL(`src/views/${slug}/${entry.assets}/`, root), new URL(`${entry.assets}/`, path), { recursive: true });
   if (entry.customHost) await writeFile(new URL('host.mjs', path), await bundle('host.mjs', 'esm', ['../catalog.mjs', '../storage.mjs']));
   await writeFile(new URL('index.html', path), page(`${title} | Vizint`, '../', `
     <div class="flex flex-wrap items-center gap-2">

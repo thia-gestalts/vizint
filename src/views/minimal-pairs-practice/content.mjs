@@ -2,8 +2,8 @@ import { readFileSync } from 'node:fs';
 import { parse } from 'yaml';
 import { languages as packs } from './languages.mjs';
 
-export function minimalPairsEntry(app) {
-  const { title, intro, languages } = parse(readFileSync(new URL('learning.yml', import.meta.url), 'utf8'));
+export default function minimalPairsEntry(app) {
+  const { languages } = parse(readFileSync(new URL('learning.yml', import.meta.url), 'utf8'));
   const records = [];
   const topics = [];
   const exercises = [];
@@ -28,9 +28,6 @@ export function minimalPairsEntry(app) {
   }
 
   return {
-    slug: 'minimal-pairs-practice', activity: 'minimal-pairs-practice', type: 'attempt',
-    title, intro, customHost: true, media: true, assets: 'data', collapseExercises: true,
-    frameHeight: '29rem', previewReady: '#answers button:not(:disabled)', previewHash: '#exercise-vie',
-    learning: { records, topics, exercises },
+    records, topics, exercises,
   };
 }

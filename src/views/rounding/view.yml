@@ -1,0 +1,54 @@
+order: 60
+activity: round-to-nearest-tenth
+previewReady: "#options button"
+frameHeight: 21rem
+title: Rounding to the nearest tenth
+intro: Choose the value rounded to one decimal place. The hundredths digit tells
+  you whether to round up.
+type: attempt
+source: Exercise format inspired by Stembridge’s rounding drills (CC BY 4.0).
+learning:
+  records:
+    - kind: topic
+      name: Rounding
+    - kind: topic
+      name: Decimal Place Value
+    - kind: fact
+      key: rounding/hundredths-digit
+      statement: When rounding a positive decimal to the nearest tenth, the hundredths
+        digit determines whether to round up.
+    - kind: question
+      id: bc64e437-1e88-4abc-9c09-b94e04f4e298
+      text: Which digit tells you whether to round up to the nearest tenth?
+  topics:
+    - target:
+        kind: topic
+        name: rounding
+      weight: 1
+    - target:
+        kind: topic
+        name: decimal place value
+      weight: 0.6
+  teaches:
+    - target:
+        kind: fact
+        key: rounding/hundredths-digit
+  answers:
+    - target:
+        kind: question
+        id: bc64e437-1e88-4abc-9c09-b94e04f4e298
+  exercises:
+    - id: nearest-tenth
+      title: Round to the nearest tenth
+      records:
+        - kind: skill
+          key: rounding/nearest-tenth
+          name: Round to the nearest tenth
+      practices:
+        - target:
+            kind: skill
+            key: rounding/nearest-tenth
+      assesses:
+        - target:
+            kind: skill
+            key: rounding/nearest-tenth

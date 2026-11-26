@@ -1,0 +1,13 @@
+order: 20
+type: attempt
+title: Minimal pairs practice
+intro: Listen to Vietnamese or Mandarin speech and choose the spelling with the
+  tone you heard.
+customHost: true
+media: true
+assets: data
+collapseExercises: true
+frameHeight: 29rem
+previewReady: "#answers button:not(:disabled)"
+previewHash: "#exercise-vie"
+learningModule: content.mjs

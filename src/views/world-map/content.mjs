@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 
-export function worldMapEntry(app) {
+export default function worldMapEntry(app) {
   const read = name => JSON.parse(readFileSync(new URL(`data/${name}.json`, import.meta.url)));
   const countries = read('countries');
   const groups = read('groups');
@@ -28,12 +28,6 @@ export function worldMapEntry(app) {
     return { id, title, practices: targets, assesses: targets };
   });
   return {
-    slug: 'world-map', activity: 'world-map', title: 'World Map', type: 'attempt',
-    previewReady: '#answers button',
-    intro: 'Find and identify countries. Practice adapts as you learn their locations.',
-    frameHeight: 'max(28rem, calc(100dvh - 5rem))',
-    customHost: true, assets: 'data', collapseExercises: true,
-    source: 'Map geometry from Natural Earth.',
-    learning: { records: [topic, ...facts.values()], topics: [{ target: { kind: topic.kind, id: topic.id } }], exercises },
+    records: [topic, ...facts.values()], topics: [{ target: { kind: topic.kind, id: topic.id } }], exercises,
   };
 }

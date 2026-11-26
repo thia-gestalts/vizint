@@ -1,0 +1,39 @@
+order: 30
+activity: bezier-explorer
+frameHeight: calc(clamp(0px, 50vw - 1rem, 27rem) + 6rem)
+title: Bézier explorer
+intro: Drag a control point to reshape the curve. Move t to see how repeated
+  interpolation locates a point on it.
+type: engagement
+source: Inspired by “How a Bézier curve is drawn” in the Gestalts visualization
+  examples.
+learning:
+  records:
+    - kind: topic
+      name: Bézier Curves
+    - kind: topic
+      name: Linear Interpolation
+    - kind: fact
+      key: bezier/repeated-interpolation
+      statement: Repeated linear interpolation between the control points gives a
+        point on the cubic Bézier curve.
+    - kind: question
+      id: 0d74cc9b-e190-4096-aab4-0163191c1253
+      text: How does repeated interpolation trace a cubic Bézier curve?
+  topics:
+    - target:
+        kind: topic
+        name: bézier curves
+      weight: 1
+    - target:
+        kind: topic
+        name: linear interpolation
+      weight: 0.7
+  teaches:
+    - target:
+        kind: fact
+        key: bezier/repeated-interpolation
+  answers:
+    - target:
+        kind: question
+        id: 0d74cc9b-e190-4096-aab4-0163191c1253

@@ -1,0 +1,31 @@
+order: 50
+frameHeight: calc(clamp(0px, 50vw - 1rem, 27rem) + 6rem)
+sharedScript: src/vertical-point-drag.js
+title: Squared errors
+intro: Drag the three points up or down. The vertical gap to the truth line
+  forms one side of each square. Its area is the squared error for that point.
+type: engagement
+learning:
+  records:
+    - kind: topic
+      name: Squared Error
+    - kind: fact
+      key: squared-error/definition
+      statement: An individual squared error is the square of the difference between
+        the observed and reference values.
+    - kind: question
+      id: 96cf56b2-3154-45db-845c-e8ae9ea24a3c
+      text: How do you calculate the squared error for one observation?
+  topics:
+    - target:
+        kind: topic
+        name: squared error
+      weight: 1
+  teaches:
+    - target:
+        kind: fact
+        key: squared-error/definition
+  answers:
+    - target:
+        kind: question
+        id: 96cf56b2-3154-45db-845c-e8ae9ea24a3c

@@ -3,7 +3,11 @@ import { once } from 'node:events';
 import { readdir, writeFile } from 'node:fs/promises';
 import { chromium } from 'playwright-core';
 import { entries } from '../src/catalog.mjs';
+import { readFileSync } from 'node:fs';
+import { buildLearningGraph } from './learning-graph.mjs';
 import { server } from './serve.mjs';
+
+buildLearningGraph(entries, JSON.parse(readFileSync(new URL('../vendor/thia-gestalts/common/v2.json', import.meta.url))));
 
 const width = 768;
 const height = 464;
@@ -25,7 +29,7 @@ async function capturePreview(page, origin, { slug, previewReady, previewHash = 
   const screenshot = await iframe.screenshot({ animations: 'disabled' });
   try {
     await writeFile(new URL('preview.png', folder), screenshot, { flag: 'wx' });
-    console.log(`Saved src/${slug}/preview.png`);
+    console.log(`Saved src/views/${slug}/preview.png`);
   } catch (error) {
     if (error.code !== 'EEXIST') throw error;
   }
@@ -33,7 +37,7 @@ async function capturePreview(page, origin, { slug, previewReady, previewHash = 
 
 const missing = [];
 for (const entry of entries) {
-  const folder = new URL(`../src/${entry.slug}/`, import.meta.url);
+  const folder = new URL(`../src/views/${entry.slug}/`, import.meta.url);
   if (!(await readdir(folder)).includes('preview.png')) missing.push({ entry, folder });
 }
 if (!missing.length) {

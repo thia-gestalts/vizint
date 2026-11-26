@@ -1,0 +1,50 @@
+order: 40
+activity: mean-squared-error
+frameHeight: calc(clamp(0px, 50vw - 1rem, 27rem) + 6rem)
+sharedScript: src/vertical-point-drag.js
+title: Mean squared error (MSE)
+intro: Drag the three points up or down. Each dashed segment shows the distance
+  to the prediction. Square those distances and average them to get the MSE.
+type: engagement
+learning:
+  records:
+    - kind: topic
+      name: Mean Squared Error
+    - kind: fact
+      key: mean-squared-error/definition
+      statement: Mean squared error is the arithmetic mean of the individual squared
+        errors.
+    - kind: skill
+      key: arithmetic/calculate-mean
+      name: Calculate an arithmetic mean
+    - kind: question
+      id: 32dfd8d1-9023-4e73-bede-bf2432d46c9c
+      text: How do you calculate mean squared error?
+  topics:
+    - target:
+        kind: topic
+        name: mean squared error
+      weight: 1
+    - target:
+        kind: topic
+        name: squared error
+      weight: 0.7
+  teaches:
+    - target:
+        kind: fact
+        key: mean-squared-error/definition
+  answers:
+    - target:
+        kind: question
+        id: 32dfd8d1-9023-4e73-bede-bf2432d46c9c
+  prerequisites:
+    - target:
+        kind: view
+        id: squared-errors
+      weight: 0.8
+      reason: See how each vertical error becomes an individual squared error.
+    - target:
+        kind: skill
+        key: arithmetic/calculate-mean
+      weight: 0.6
+      reason: The final step averages the squared errors.
