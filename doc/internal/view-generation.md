@@ -28,7 +28,11 @@ JavaScript-only repair that preserves HTML and CSS. First attempts use
 results are saved. The first draft and preview remain available.
 
 Start the local dashboard with `mise run views:admin` and open
-http://127.0.0.1:8765 or follow the run link printed by the evaluator.
+the URL printed at startup. The default is http://127.0.0.1:8765. If that
+port is busy, the dashboard tries 8766 through 8774. Use
+`mise run views:admin --port 9001` to require a specific port. If the
+dashboard uses a different port, use that port in the evaluator's run link,
+the Claude Code MCP URL, and the JSON API examples below.
 The admin task uses uv to install its locked Python dependencies on first run.
 Use the dashboard to compare attempts, timings, screenshots, and diagnostics.
 Each run lives under the gitignored `.view-generation/` folder

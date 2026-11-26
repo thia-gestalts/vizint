@@ -1,4 +1,7 @@
+import argparse
+import errno
 import json
+import socket
 import re
 from pathlib import Path
 
@@ -198,5 +201,38 @@ app = TrustedHostMiddleware(
     allowed_hosts=["127.0.0.1", "localhost"],
 )
 
+def main():
+    parser = argparse.ArgumentParser(description="Serve the local evaluation admin.")
+    parser.add_argument("--port", type=int, help="Require a specific loopback port.")
+    args = parser.parse_args()
+    if args.port is not None and not 1 <= args.port <= 65535:
+        parser.error("--port must be between 1 and 65535")
+
+    ports = [args.port] if args.port is not None else range(8765, 8775)
+    with socket.socket() as listener:
+        if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        else:
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        for port in ports:
+            try:
+                listener.bind(("127.0.0.1", port))
+            except OSError as error:
+                if error.errno != errno.EADDRINUSE and getattr(error, "winerror", None) != 10048:
+                    raise
+            else:
+                break
+        else:
+            parser.exit(1, "Admin port unavailable. Use mise run views:admin --port PORT.\n")
+
+        security = mcp.settings.transport_security
+        security.allowed_hosts = [f"{host}:{port}" for host in ("127.0.0.1", "localhost")]
+        security.allowed_origins = [f"http://{host}" for host in security.allowed_hosts]
+        print(f"View evaluations: http://127.0.0.1:{port}", flush=True)
+        print(f"Agent MCP endpoint: http://127.0.0.1:{port}/mcp", flush=True)
+        config = uvicorn.Config(app, host="127.0.0.1", port=port)
+        uvicorn.Server(config).run(sockets=[listener])
+
+
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8765)
+    main()
