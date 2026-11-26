@@ -1,3 +1,4 @@
+import { activityProgram } from './activity-program.mjs';
 import { build } from 'esbuild';
 import { Script } from 'node:vm';
 import ts from 'typescript';
@@ -7,16 +8,6 @@ import { buildLearningGraph } from './learning-graph.mjs';
 import { readActivityScript } from './activity-script.mjs';
 
 buildLearningGraph(entries, JSON.parse(readFileSync(new URL('../vendor/thia-gestalts/common/v2.json', import.meta.url))));
-
-const options = {
-  allowJs: true,
-  checkJs: true,
-  noEmit: true,
-  strict: true,
-  target: ts.ScriptTarget.ES2022,
-  lib: ['lib.es2022.d.ts', 'lib.dom.d.ts', 'lib.dom.iterable.d.ts'],
-  types: [],
-};
 
 const diagnostics = [];
 for (const entry of entries) {
@@ -29,13 +20,7 @@ for (const entry of entries) {
   }
   const { parts, source } = await readActivityScript(entry);
   const filename = parts.at(-1).file;
-  const host = ts.createCompilerHost(options);
-  const getSourceFile = host.getSourceFile;
-  host.getSourceFile = (file, ...args) => file === filename
-    ? ts.createSourceFile(file, source, options.target)
-    : getSourceFile(file, ...args);
-  // Each activity runs in its own frame with its own global scope.
-  const program = ts.createProgram([filename], options, host);
+  const program = activityProgram(filename, source);
   if (program.getSyntacticDiagnostics().length === 0) {
     try {
       new Script(source, { filename });

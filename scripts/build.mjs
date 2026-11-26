@@ -1,3 +1,4 @@
+import { activityFrame } from './activity-frame.mjs';
 import { build } from 'esbuild';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
@@ -124,12 +125,7 @@ for (const entry of entries) {
   const code = entry.customHost ? await bundle('activity.js', 'iife') : (await readActivityScript(entry)).source;
   const styles = await read(`src/views/${slug}/activity.css`);
   const common = await read('src/frame.css');
-  // Activity scripts exist only inside the sandboxed document in the output.
-  const frame = `<!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline';${entry.media ? ' media-src blob:;' : ''} form-action 'none'; base-uri 'none'">
-<title>${escapeHTML(title)}</title><style>${common}\n${styles}</style></head>
-<body>${markup}<script>${code.replace(/<\/script/gi, '<\\/script')}</script></body></html>`;
+  const frame = activityFrame({ title, common, styles, markup, code, media: entry.media });
   const path = new URL(`${slug}/`, output);
   await mkdir(path);
   const folder = new URL(`src/views/${slug}/`, root);

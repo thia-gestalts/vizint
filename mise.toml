@@ -9,3 +9,27 @@ run = ["npm ci", "npm run build"]
 description = "Build and serve Vizint locally"
 depends = ["setup"]
 run = "OLYMP_ORIGIN=https://gestalter.koljasam.com npm start"
+
+[tasks.build]
+description = "Build the static Vizint site"
+run = "npm run build"
+
+[tasks."views:check"]
+description = "Validate view scripts and learning links"
+run = "npm run check:views"
+
+[tasks."views:previews"]
+description = "Capture missing previews for checked-in views"
+run = "npm run previews"
+
+[tasks.gen]
+description = "Generate a draft view from a prompt with local Ollama"
+run = "node scripts/view-generation.mjs generate"
+
+[tasks."views:eval"]
+description = "Benchmark local Ollama models and write an HTML report"
+run = "node scripts/view-generation.mjs eval"
+
+[tasks."views:eval-control"]
+description = "Verify the evaluator against the checked-in Bézier view"
+run = "node scripts/view-generation.mjs eval --control"
