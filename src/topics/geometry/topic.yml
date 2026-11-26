@@ -1,0 +1,7 @@
+name: Geometry
+intro: Shapes, curves and the space they occupy.
+links:
+  - relation: within
+    target:
+      kind: topic
+      name: mathematics

@@ -2,12 +2,12 @@ import { execFileSync } from 'node:child_process';
 import { once } from 'node:events';
 import { readdir, writeFile } from 'node:fs/promises';
 import { chromium } from 'playwright-core';
-import { entries } from '../src/catalog.mjs';
+import { entries, topics } from '../src/catalog.mjs';
 import { readFileSync } from 'node:fs';
 import { buildLearningGraph } from './learning-graph.mjs';
 import { server } from './serve.mjs';
 
-buildLearningGraph(entries, JSON.parse(readFileSync(new URL('../vendor/thia-gestalts/common/v2.json', import.meta.url))));
+buildLearningGraph(entries, JSON.parse(readFileSync(new URL('../vendor/thia-gestalts/common/v2.json', import.meta.url))), topics);
 
 const width = 768;
 const height = 464;

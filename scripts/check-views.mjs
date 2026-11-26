@@ -3,12 +3,12 @@ import { bundleActivity } from './activity-libraries.mjs';
 import { build } from 'esbuild';
 import { Script } from 'node:vm';
 import ts from 'typescript';
-import { entries } from '../src/catalog.mjs';
+import { entries, topics } from '../src/catalog.mjs';
 import { readFileSync } from 'node:fs';
 import { buildLearningGraph } from './learning-graph.mjs';
 import { readActivityScript } from './activity-script.mjs';
 
-buildLearningGraph(entries, JSON.parse(readFileSync(new URL('../vendor/thia-gestalts/common/v2.json', import.meta.url))));
+buildLearningGraph(entries, JSON.parse(readFileSync(new URL('../vendor/thia-gestalts/common/v2.json', import.meta.url))), topics);
 
 const diagnostics = [];
 for (const entry of entries) {

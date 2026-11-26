@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { cp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
-import { app, entries } from '../src/catalog.mjs';
+import { app, entries, topics } from '../src/catalog.mjs';
 import { readActivityScript } from './activity-script.mjs';
 import { buildLearningGraph, exerciseAnchor } from './learning-graph.mjs';
 import { activityLearning, escapeHTML, writeLearningPages } from './learning-pages.mjs';
@@ -23,8 +23,13 @@ for (const [path, expected] of Object.entries(pin.sha256)) {
     throw new Error(`Pinned schema changed: ${path}`);
   }
 }
+for (const [path, expected] of Object.entries(JSON.parse(await read('vendor/unicode/pin.json')).sha256)) {
+  if (createHash('sha256').update(await readFile(new URL('vendor/unicode/' + path, root))).digest('hex') !== expected) {
+    throw new Error(`Pinned Unicode data changed: ${path}`);
+  }
+}
 
-const graph = buildLearningGraph(entries, JSON.parse(await read(vendor + 'common/v2.json')));
+const graph = buildLearningGraph(entries, JSON.parse(await read(vendor + 'common/v2.json')), topics);
 
 function icon(name) {
   const svg = readFileSync(new URL(`icons/${name}.svg`, lucide), 'utf8');

@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
-import { entries } from '../src/catalog.mjs';
+import { entries, topics } from '../src/catalog.mjs';
 import { embedSearch } from './learning-embeddings.mjs';
 import { buildLearningGraph } from './learning-graph.mjs';
 import { createQueryIndex, kinds, neighbors, rank, relations } from './learning-query.mjs';
@@ -18,7 +18,7 @@ export async function main([command, ...args]) {
   });
   if (!input?.trim() || extra.length) throw new Error('Expected one query or item ID');
   const schema = JSON.parse(readFileSync(new URL('../vendor/thia-gestalts/common/v2.json', import.meta.url)));
-  const index = createQueryIndex(entries, buildLearningGraph(entries, schema));
+  const index = createQueryIndex(entries, buildLearningGraph(entries, schema, topics));
   if (command === 'neighbors') {
     if (values.direction !== undefined && !['in', 'out', 'both'].includes(values.direction)) throw new Error('Invalid direction');
     if (values.relation !== undefined && !relations.includes(values.relation)) throw new Error('Invalid relation');

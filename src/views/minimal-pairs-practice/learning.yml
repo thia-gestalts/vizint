@@ -2,6 +2,7 @@ languages:
   vie:
     name: Vietnamese
     topic: Vietnamese tones
+    within: [Vietnamese, Phonetics]
     tones:
       ngang: ngang
       huyen: huyền
@@ -12,6 +13,7 @@ languages:
   cmn:
     name: Mandarin
     topic: Mandarin tones
+    within: [Mandarin Chinese, Phonetics]
     tones:
       tone1: first tone
       tone2: second tone

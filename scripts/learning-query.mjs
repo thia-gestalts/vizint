@@ -2,7 +2,7 @@ import { identity, recordLabel } from './learning-graph.mjs';
 import { recordPath, viewPath } from './learning-pages.mjs';
 
 export const kinds = ['view', 'exercise', 'topic', 'fact', 'skill', 'question'];
-export const relations = ['topics', 'teaches', 'answers', 'practices', 'assesses', 'prerequisites', 'sharedTopic'];
+export const relations = ['topics', 'teaches', 'answers', 'practices', 'assesses', 'prerequisites', 'sharedTopic', 'within', 'related'];
 const viewId = entry => 'view:' + entry.activity;
 const exerciseId = (entry, exercise) => `exercise:${entry.activity}/${exercise.id}`;
 
@@ -41,8 +41,14 @@ export function createQueryIndex(entries, graph) {
       }
     }
     const label = recordLabel(record);
-    items.set(id, { id, kind: record.kind, label, path: links ? recordPath(record) : undefined,
-      text: [label, ...topics].join('\n') });
+    const intro = graph.topicFolders.get(id)?.intro;
+    const hasPage = links || graph.topicFolders.has(id)
+      || graph.topicLinks.some(({ subject, object }) => identity(subject) === id || identity(object) === id);
+    items.set(id, { id, kind: record.kind, label, path: hasPage ? recordPath(record) : undefined,
+      text: [label, ...(intro ? [intro] : []), ...topics].join('\n') });
+  }
+  for (const { subject, relation, object, source } of graph.topicLinks) {
+    edges.push({ from: identity(subject), to: identity(object), relation, source });
   }
   return { items, edges };
 }

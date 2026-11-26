@@ -5,13 +5,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { test } from 'node:test';
-import { entries, loadCatalog } from '../src/catalog.mjs';
+import { entries, loadCatalog, topics } from '../src/catalog.mjs';
 import { embedSearch } from './learning-embeddings.mjs';
 import { buildLearningGraph } from './learning-graph.mjs';
 import { createQueryIndex, neighbors, rank } from './learning-query.mjs';
 
 const common = JSON.parse(await readFile(new URL('../vendor/thia-gestalts/common/v2.json', import.meta.url)));
-const index = createQueryIndex(entries, buildLearningGraph(entries, common));
+const index = createQueryIndex(entries, buildLearningGraph(entries, common, topics));
 
 async function temporaryDirectory(t) {
   const path = await mkdtemp(join(tmpdir(), 'vizint-learning-'));
@@ -81,4 +81,14 @@ test('CLI falls back to lexical results and applies kind and limit filters', asy
   assert.match(diagnostic.mock.calls[0].arguments[0], /Semantic search unavailable/);
   assert.equal(mode, 'lexical');
   assert.deepEqual(results.map(({ id }) => id), ['view:bezier-explorer']);
+});
+
+test('topic links are queryable neighbors', () => {
+  const statistics = [...index.items.values()].find(({ kind, label }) => kind === 'topic' && label === 'Statistics');
+  assert.ok(statistics.path);
+  const { links } = neighbors(index, statistics.id, { relation: 'within' });
+  const labels = (direction) => links.filter((link) => link.direction === direction)
+    .map(({ from, to }) => (direction === 'in' ? from : to).label).sort();
+  assert.deepEqual(labels('in'), ['Mean Squared Error', 'Squared Error']);
+  assert.deepEqual(labels('out'), ['Mathematics']);
 });

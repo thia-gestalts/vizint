@@ -87,6 +87,31 @@ function overviewSections(links, prefix) {
   }).join('');
 }
 
+function topicSections(graph, key, prefix) {
+  const { topicGraph } = graph;
+  const topicItems = (topics) => topics.map((topic) => linkTo(prefix + recordPath(topic), recordLabel(topic)));
+  const direct = new Set((graph.backlinks.get(key) ?? []).filter((link) => link.relation === 'topics' && link.weight !== 0)
+    .map((link) => link.entry.activity));
+  const gathered = new Map();
+  for (const { topic } of topicGraph.descendants(key)) {
+    for (const link of visible(graph.backlinks.get(identity(topic)) ?? [], 'topics')) {
+      const { activity } = link.entry;
+      if (direct.has(activity)) continue;
+      if (!gathered.has(activity)) gathered.set(activity, { entry: link.entry, via: new Map() });
+      gathered.get(activity).via.set(identity(topic), topic);
+    }
+  }
+  const viaItems = [...gathered.values()].map(({ entry, via }) => linkTo(prefix + viewPath(entry), entry.title)
+    + `<p class="text-sm text-base-content/75">Under ${[...via.values()].map((topic) =>
+      linkTo(prefix + recordPath(topic), recordLabel(topic))).join(', ')}</p>`);
+  return {
+    before: section('Within', topicItems(topicGraph.broader(key)))
+      + section('Narrower topics', topicItems(topicGraph.narrower(key)))
+      + section('Related topics', topicItems(topicGraph.related(key))),
+    after: section('Also covered under narrower topics', viaItems),
+  };
+}
+
 export async function writeLearningPages({ output, page, entries, graph }) {
   const searchItems = entries.map((entry) => ({
     kind: 'view', label: entry.title, path: viewPath(entry),
@@ -115,10 +140,14 @@ export async function writeLearningPages({ output, page, entries, graph }) {
     <ul id="search-results" class="mt-3 space-y-2"></ul>`, '<script type="module" src="../search.mjs"></script>'));
 
   const prefix = '../../../';
+  const linkedTopics = new Set(graph.topicLinks.flatMap(({ subject, object }) => [identity(subject), identity(object)]));
   for (const [key, record] of graph.records) {
     const links = graph.backlinks.get(key);
-    if (!links) continue;
+    const isTopic = record.kind === 'topic';
+    if (!links && !(isTopic && (linkedTopics.has(key) || graph.topicFolders.has(key)))) continue;
     const label = recordLabel(record);
+    const intro = graph.topicFolders.get(key)?.intro;
+    const { before = '', after = '' } = isTopic ? topicSections(graph, key, prefix) : {};
     const path = recordPath(record);
     const directory = new URL(path, output);
     await mkdir(directory, { recursive: true });
@@ -126,7 +155,8 @@ export async function writeLearningPages({ output, page, entries, graph }) {
       ${linkTo(prefix + 'learn/', 'Find learning material')}
       <p class="mt-5 text-sm font-medium text-base-content/75">${kindLabels[record.kind]}</p>
       <h1 class="mt-2 text-3xl leading-tight font-semibold tracking-tight sm:text-5xl">${escapeHTML(label)}</h1>
-      ${overviewSections(links, prefix)}`));
+      ${intro ? `<p class="mt-4 max-w-2xl text-lg">${escapeHTML(intro)}</p>` : ''}
+      ${before}${overviewSections(links ?? [], prefix)}${after}`));
     searchItems.push({ kind: record.kind, label, path });
   }
 

@@ -21,6 +21,14 @@ learning:
     - kind: question
       id: 32dfd8d1-9023-4e73-bede-bf2432d46c9c
       text: How do you calculate mean squared error?
+  topicLinks:
+    - subject:
+        kind: topic
+        name: mean squared error
+      relation: within
+      object:
+        kind: topic
+        name: statistics
   topics:
     - target:
         kind: topic

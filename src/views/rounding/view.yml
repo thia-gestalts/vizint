@@ -21,6 +21,21 @@ learning:
     - kind: question
       id: bc64e437-1e88-4abc-9c09-b94e04f4e298
       text: Which digit tells you whether to round up to the nearest tenth?
+  topicLinks:
+    - subject:
+        kind: topic
+        name: rounding
+      relation: within
+      object:
+        kind: topic
+        name: arithmetic
+    - subject:
+        kind: topic
+        name: decimal place value
+      relation: within
+      object:
+        kind: topic
+        name: arithmetic
   topics:
     - target:
         kind: topic

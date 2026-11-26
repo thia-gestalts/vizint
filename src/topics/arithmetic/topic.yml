@@ -1,0 +1,7 @@
+name: Arithmetic
+intro: Working with numbers, from counting and place value to operations and rounding.
+links:
+  - relation: within
+    target:
+      kind: topic
+      name: mathematics

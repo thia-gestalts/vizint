@@ -21,6 +21,28 @@ learning:
     - kind: question
       id: 0d74cc9b-e190-4096-aab4-0163191c1253
       text: How does repeated interpolation trace a cubic Bézier curve?
+  topicLinks:
+    - subject:
+        kind: topic
+        name: bézier curves
+      relation: within
+      object:
+        kind: topic
+        name: geometry
+    - subject:
+        kind: topic
+        name: linear interpolation
+      relation: within
+      object:
+        kind: topic
+        name: mathematics
+    - subject:
+        kind: topic
+        name: bézier curves
+      relation: related
+      object:
+        kind: topic
+        name: linear interpolation
   topics:
     - target:
         kind: topic

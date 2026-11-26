@@ -17,6 +17,14 @@ learning:
     - kind: question
       id: 96cf56b2-3154-45db-845c-e8ae9ea24a3c
       text: How do you calculate the squared error for one observation?
+  topicLinks:
+    - subject:
+        kind: topic
+        name: squared error
+      relation: within
+      object:
+        kind: topic
+        name: statistics
   topics:
     - target:
         kind: topic

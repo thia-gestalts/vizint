@@ -1,11 +1,12 @@
 import { readFileSync } from 'node:fs';
+import { nameId } from '../../name-id.mjs';
 
 export default function worldMapEntry(app) {
   const read = name => JSON.parse(readFileSync(new URL(`data/${name}.json`, import.meta.url)));
   const countries = read('countries');
   const groups = read('groups');
   const names = new Map(read('map.geo').features.map(({ properties }) => [properties.code, properties.name]));
-  const topic = { kind: 'topic', id: 'name:776f726c64206d6170', name: 'World Map' };
+  const topic = { kind: 'topic', id: nameId('World Map'), name: 'World Map' };
   const modes = [
     ['find-in-neighborhood', 'Find a country in its neighborhood', 'neighborhood'],
     ['find-on-world-map', 'Find a country on the world map', 'worldMap'],
@@ -29,5 +30,6 @@ export default function worldMapEntry(app) {
   });
   return {
     records: [topic, ...facts.values()], topics: [{ target: { kind: topic.kind, id: topic.id } }], exercises,
+    topicLinks: [{ subject: { kind: topic.kind, id: topic.id }, relation: 'within', object: { kind: 'topic', id: nameId('Geography') } }],
   };
 }

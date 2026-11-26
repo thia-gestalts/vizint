@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { parse } from 'yaml';
+import { nameId } from '../../name-id.mjs';
 import { languages as packs } from './languages.mjs';
 
 export default function minimalPairsEntry(app) {
@@ -7,10 +8,14 @@ export default function minimalPairsEntry(app) {
   const records = [];
   const topics = [];
   const exercises = [];
+  const topicLinks = [];
   const link = ({ kind, id }) => ({ target: { kind, id } });
 
-  for (const [code, { name, topic, tones }] of Object.entries(languages)) {
-    const topicRecord = { kind: 'topic', id: `name:${Buffer.from(topic.toLowerCase()).toString('hex')}`, name: topic };
+  for (const [code, { name, topic, within = [], tones }] of Object.entries(languages)) {
+    const topicRecord = { kind: 'topic', id: nameId(topic), name: topic };
+    for (const broader of within) {
+      topicLinks.push({ subject: link(topicRecord).target, relation: 'within', object: { kind: 'topic', id: nameId(broader) } });
+    }
     records.push(topicRecord);
     topics.push(link(topicRecord));
     const keys = packs[code].tones;
@@ -28,6 +33,6 @@ export default function minimalPairsEntry(app) {
   }
 
   return {
-    records, topics, exercises,
+    records, topics, exercises, topicLinks,
   };
 }

@@ -1,0 +1,7 @@
+name: Statistics
+intro: Ways to describe data and measure how well a model fits it.
+links:
+  - relation: within
+    target:
+      kind: topic
+      name: mathematics

@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { parse } from 'yaml';
 import { validateLibraries } from '../scripts/activity-libraries.mjs';
+import { nameId } from './name-id.mjs';
 
 export const app = 'example.thia.vizint';
 
@@ -9,7 +10,7 @@ const relations = 'topics teaches answers prerequisites practices assesses'.spli
 const segment = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 function target({ kind, name, key, id }) {
-  if (kind === 'topic') id = 'name:' + Buffer.from(name.toLowerCase()).toString('hex');
+  if (kind === 'topic') id = nameId(name);
   if (kind === 'fact' || kind === 'skill') {
     if (typeof key !== 'string' || !key.trim()) throw new Error('Missing fact or skill key');
     id = `key:${app}:${key}`;
@@ -17,8 +18,20 @@ function target({ kind, name, key, id }) {
   return { kind, id };
 }
 
+function exactFields(value, allowed, what) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`Expected a ${what} mapping`);
+  for (const field of Object.keys(value)) {
+    if (!allowed.includes(field)) throw new Error(`Unknown ${what} field ${field}`);
+  }
+}
+
+function topicLink(link) {
+  exactFields(link, ['subject', 'relation', 'object'], 'topic link');
+  return { subject: target(link.subject), relation: link.relation, object: target(link.object) };
+}
+
 function learning(data, exercise = false) {
-  const supported = ['records', ...relations, ...(exercise ? ['id', 'title'] : ['exercises'])];
+  const supported = ['records', ...relations, ...(exercise ? ['id', 'title'] : ['exercises', 'topicLinks'])];
   for (const field of Object.keys(data)) {
     if (!supported.includes(field)) throw new Error(`Unknown learning field ${field}`);
   }
@@ -29,6 +42,7 @@ function learning(data, exercise = false) {
       return { ...target(record), [label]: record[label] };
     })];
     if (field === 'exercises') return [field, value.map(item => learning(item, true))];
+    if (field === 'topicLinks') return [field, value.map(topicLink)];
     return [field, value.map(link => ({ ...link, target: target(link.target) }))];
   }));
 }
@@ -89,4 +103,29 @@ export async function loadCatalog(root = new URL('views/', import.meta.url)) {
     .map(({ entry }) => entry);
 }
 
+export function loadTopics(root = new URL('topics/', import.meta.url)) {
+  if (!statSync(root, { throwIfNoEntry: false })?.isDirectory()) return [];
+  return readdirSync(root, { withFileTypes: true }).filter(item => item.isDirectory()).map(({ name: slug }) => {
+    const manifest = new URL(slug + '/topic.yml', root);
+    try {
+      if (!segment.test(slug)) throw new Error('Invalid topic folder name');
+      const data = parse(readFileSync(manifest, 'utf8'));
+      exactFields(data, ['name', 'intro', 'links'], 'topic');
+      for (const field of ['name', 'intro']) {
+        if (typeof data[field] !== 'string' || !data[field].trim()) throw new Error(`Expected a nonempty ${field}`);
+      }
+      if ('links' in data && !Array.isArray(data.links)) throw new Error('Expected links to be a list');
+      const record = { kind: 'topic', id: nameId(data.name), name: data.name };
+      const links = (data.links ?? []).map(link => {
+        exactFields(link, ['relation', 'target'], 'topic link');
+        return { subject: { kind: record.kind, id: record.id }, relation: link.relation, object: target(link.target) };
+      });
+      return { slug, record, intro: data.intro, links };
+    } catch (error) {
+      throw new Error(`${manifest.pathname}: ${error.message}`, { cause: error });
+    }
+  }).sort((a, b) => a.slug.localeCompare(b.slug));
+}
+
 export const entries = await loadCatalog();
+export const topics = loadTopics();
