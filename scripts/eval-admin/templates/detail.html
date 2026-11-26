@@ -3,6 +3,56 @@
 {% block content %}
 <h1 class="break-all text-2xl font-semibold">{{ run.id }}</h1>
 <a class="text-indigo-700 underline" href="{{ run.api_url }}">Run JSON</a>
+{% if busy %}<p class="text-sm">An evaluation is already running.</p>{% endif %}
+{% if run.job %}
+<section class="space-y-2 rounded-lg border border-slate-200 bg-white p-4">
+  <h2 class="font-semibold">Evaluation {{ run.job.status }}</h2>
+  {% if run.job.error %}<p>{{ run.job.error }}</p>{% endif %}
+  {% if active %}
+  <form method="post" action="/runs/{{ run.id }}/cancel">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="rounded border px-3 py-1">Cancel evaluation</button>
+  </form>
+  <script>setTimeout(() => { if (!document.hidden) location.reload(); }, 4000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) location.reload(); });</script>
+  {% endif %}
+  {% if log %}<details{% if run.job.status == 'failed' %} open{% endif %}><summary>Runner output</summary>
+    <pre class="whitespace-pre-wrap break-words text-sm">{{ log }}</pre></details>{% endif %}
+</section>
+{% endif %}
+{% if not active and replay_source %}
+<form method="post" action="/evaluations">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <input type="hidden" name="action" value="replay">
+  <input type="hidden" name="run_id" value="{{ run.id }}">
+  <button class="rounded border px-3 py-1">Replay repair policies</button>
+</form>
+{% endif %}
+{% if comparison %}
+<section class="space-y-2 rounded-lg border border-slate-200 bg-white p-4">
+  <h2 class="text-xl font-semibold">JavaScript versus TypeScript</h2>
+  <table class="text-left text-sm">
+    <thead><tr>{% for label in ['Outcome', 'JavaScript only', 'TypeScript only', 'Both', 'Neither'] %}<th class="pr-4" scope="col">{{ label }}</th>{% endfor %}</tr></thead>
+    <tbody>
+      {% for metric, counts in comparison.outcomes.items() %}
+      <tr><th scope="row" class="pr-4">{{ 'Working activity' if metric == 'working' else 'Full pass' }}</th>
+        {% for count in counts.values() %}<td>{{ count }}</td>{% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="text-sm">Incomplete pairs {{ comparison.incomplete }}</p>
+  <ul class="space-y-1 text-sm">
+    {% for pair in comparison.pairs %}
+    <li>{{ pair.fixture }}{% for arm in pair.arms %} ·
+      {% if arm.attempts %}<a class="underline" href="#{{ arm.attempts[0].path }}">{{ arm.language }}</a>{% else %}{{ arm.language }}{% endif %}
+      {% if arm.elapsedSeconds is defined %} {{ arm.elapsedSeconds|round(1) }}s{% endif %}
+      {{ arm.stopReason or 'pending' }}
+    {% endfor %}</li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
 {% if run.settings %}
 <details class="rounded-lg border border-slate-200 bg-white p-4">
   <summary class="cursor-pointer font-medium">Run settings</summary>
@@ -39,6 +89,7 @@
 <section class="space-y-3">
   {% if case.prompt %}<h2 class="whitespace-pre-wrap break-words text-xl font-semibold">{{ case.prompt }}</h2>{% endif %}
   <p class="font-medium">{{ case.model }} / {{ case.name }} <span class="text-sm font-normal text-slate-600">· {{ case.status }}</span></p>
+  {% if case.language %}<p class="text-sm">{{ case.language }} · Pair {{ case.pairId }} · Arm {{ case.order }}{% if case.working %} · Working activity{% endif %}</p>{% endif %}
   {% if case.policy %}
   <p class="text-sm">
     {% if case.pairId %}Pair {{ case.pairId }} · Arm {{ case.order }} · {% endif %}
@@ -65,7 +116,7 @@
         {% if attempt.libraryRequest %}
         <li><strong>Requested {{ attempt.libraryRequest.package }}{% if attempt.libraryRequest.requestedVersion %}@{{ attempt.libraryRequest.requestedVersion }}{% endif %}</strong> · {{ 'available' if attempt.libraryRequest.available else 'unavailable' }}{% if not attempt.libraryRequest.available and attempt.libraryRequest.installedVersion %} · installed {{ attempt.libraryRequest.installedVersion }}{% endif %}<br>{{ attempt.libraryRequest.reason }}</li>
         {% endif %}
-        {% if attempt.checks.startup is defined %}
+        {% if attempt.checks and attempt.checks.startup is defined %}
         <li>Response {{ attempt.checks.response }} · Syntax {{ attempt.checks.syntax }} · Startup {{ attempt.checks.startup }} · Interaction fixture {{ attempt.checks.fixture }} · {{ attempt.checks.typeErrors | default('—') }} type errors</li>
         {% elif attempt.checks %}<li>Syntax {{ attempt.checks.syntax }} · Browser {{ attempt.checks.browser }} · {{ attempt.checks.typeErrors | default('—') }} type errors</li>{% endif %}
       </ul>

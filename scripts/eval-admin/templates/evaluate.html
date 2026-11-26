@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Evaluate · Vizint Admin{% endblock %}
+{% block content %}
+<div class="space-y-5">
+  <h1 class="text-2xl font-semibold">Evaluate</h1>
+  <nav aria-label="Evaluation tools" class="flex flex-wrap gap-x-5 gap-y-2 text-sm">
+    <a href="#compare" class="font-medium text-indigo-700 underline">Language comparison</a>
+    <a href="#eval" class="font-medium text-indigo-700 underline">Fixture evaluation</a>
+    <a href="#control" class="font-medium text-indigo-700 underline">Bézier control</a>
+    <a href="#replay" class="font-medium text-indigo-700 underline">Repair replay</a>
+  </nav>
+  {% if model_error %}<p class="text-sm">{{ model_error }}</p>{% endif %}
+  <div class="grid gap-5 md:grid-cols-2">
+  {% for action, label in [('compare', 'Compare JavaScript and TypeScript'), ('eval', 'Run fixture evaluation')] %}
+    <form id="{{ action }}" method="post" action="{{ url_for('start_evaluation') }}" class="space-y-3 rounded-lg border border-slate-200 bg-white p-4">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <input type="hidden" name="action" value="{{ action }}">
+      <h2 class="font-semibold">{{ label }}</h2>
+      <label class="block">{{ 'Models' if action == 'eval' else 'Model' }}
+        <select name="model" required{% if action == 'eval' %} multiple{% endif %} class="rounded border bg-white px-2 py-1">
+          {% for installed in models %}<option{% if installed == 'qwen3.5:4b' or (action == 'eval' and installed == 'qwen3.5:9b') %} selected{% endif %}>{{ installed }}</option>{% endfor %}
+        </select>
+      </label>
+      <label class="block">Fixture
+        <select name="fixture" class="rounded border bg-white px-2 py-1">
+          <option value="">All fixtures</option>
+          {% for fixture in fixtures %}<option>{{ fixture }}</option>{% endfor %}
+        </select>
+      </label>
+      {% if action == 'eval' %}<label class="block"><input type="checkbox" name="repair" value="once"> Allow one repair</label>{% endif %}
+      <button class="rounded bg-indigo-700 px-3 py-2 text-white disabled:opacity-50"{% if active_job or not models or not fixtures %} disabled{% endif %}>Start {{ 'comparison' if action == 'compare' else 'evaluation' }}</button>
+    </form>
+  {% endfor %}
+  <form id="control" method="post" action="{{ url_for('start_evaluation') }}" class="space-y-3 rounded-lg border border-slate-200 bg-white p-4">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="action" value="control">
+    <h2 class="font-semibold">Bézier control</h2>
+    <button class="rounded bg-indigo-700 px-3 py-2 text-white disabled:opacity-50"{% if active_job %} disabled{% endif %}>Check Bézier control</button>
+  </form>
+  <form id="replay" method="post" action="{{ url_for('start_evaluation') }}" class="space-y-3 rounded-lg border border-slate-200 bg-white p-4">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="action" value="replay">
+    <h2 class="font-semibold">Repair replay</h2>
+    <label class="block">Source runs
+      <select name="run_id" multiple required class="block max-w-full rounded border bg-white px-2 py-1">
+        {% for run in replay_sources %}
+        <option value="{{ run.id }}">{{ run.id }} · {{ run.cases[0].model }} / {{ run.cases[0].name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button class="rounded bg-indigo-700 px-3 py-2 text-white disabled:opacity-50"{% if active_job or not models or not replay_sources %} disabled{% endif %}>Replay repair policies</button>
+  </form>
+  </div>
+</div>
+{% endblock %}

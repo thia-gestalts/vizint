@@ -4,15 +4,43 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-  <title>{% block title %}View evaluations{% endblock %}</title>
+  <title>{% block title %}Vizint Admin{% endblock %}</title>
+  <style>
+    .admin-header { position: sticky; top: 0; z-index: 10; background: #0f172a; color: #f8fafc; }
+    .admin-nav { display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; align-items: center; max-width: 80rem; margin: auto; padding: .65rem 1.5rem; }
+    .admin-nav a { text-decoration: none; }
+    .admin-brand { color: white; font-weight: 700; white-space: nowrap; }
+    .admin-links { display: flex; flex-wrap: wrap; gap: .25rem; font-size: .875rem; }
+    .admin-links a, .admin-active { display: inline-flex; align-items: center; min-height: 2.5rem; padding: 0 .75rem; border-radius: .375rem; color: #e2e8f0; }
+    .admin-links a:hover, .admin-links a[aria-current="page"] { background: #334155; color: white; }
+    .admin-active { gap: .5rem; margin-left: auto; font-size: .875rem; background: #164e63; color: white; }
+    .admin-active::before { content: ""; width: .5rem; height: .5rem; border-radius: 50%; background: #67e8f9; }
+    .admin-active:hover { background: #155e75; }
+    .admin-header a:focus-visible { outline: 2px solid #67e8f9; outline-offset: 3px; }
+    .skip-navigation { color: white; position: absolute; left: 1rem; top: .5rem; padding: .5rem .75rem; background: #0f172a; transform: translateY(-200%); }
+    .skip-navigation:focus { transform: none; }
+    main [id], main[id] { scroll-margin-top: 8rem; }
+    @media (max-width: 36rem) {
+      .admin-nav { padding-inline: 1rem; column-gap: .75rem; }
+      .admin-links { order: 1; width: 100%; }
+    }
+  </style>
 </head>
 <body class="bg-slate-50 text-slate-900">
-  <header class="border-b border-slate-200 bg-white">
-    <nav class="mx-auto max-w-7xl px-6 py-4">
-      <a class="font-semibold text-indigo-700" href="/">View evaluations</a>
+  <header class="admin-header">
+    <a href="#main-content" class="skip-navigation">Skip to content</a>
+    <nav class="admin-nav" aria-label="Admin navigation">
+      <a class="admin-brand" href="{{ url_for('evaluate') }}">Vizint Admin</a>
+      <div class="admin-links">
+        <a href="{{ url_for('evaluate') }}"{% if request.endpoint == 'evaluate' %} aria-current="page"{% endif %}>Evaluate</a>
+        <a href="{{ url_for('history') }}"{% if request.endpoint in ('history', 'detail') %} aria-current="page"{% endif %}>Run history</a>
+      </div>
+      {% if active_job %}
+      <a class="admin-active" href="{{ url_for('detail', run_id=active_job) }}">Active evaluation</a>
+      {% endif %}
     </nav>
   </header>
-  <main class="mx-auto max-w-7xl space-y-6 px-6 py-8">
+  <main id="main-content" tabindex="-1" class="mx-auto max-w-7xl space-y-6 px-6 py-8">
     {% block content %}{% endblock %}
   </main>
 </body>

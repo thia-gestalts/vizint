@@ -88,7 +88,7 @@ async function ollama(path, body, timeout = 300_000) {
   return response.json();
 }
 
-async function generate(model, brief, folder, retry, result, deadline) {
+async function generate(model, brief, folder, retry, result, deadline, language) {
   const legacy = ['repair-code', 'retry-truncated'].includes(retry?.kind);
   const codeOnly = ['repair-code', 'repair-js'].includes(retry?.kind);
   const named = [...new Set([
@@ -97,9 +97,13 @@ async function generate(model, brief, folder, retry, result, deadline) {
     ...Object.keys(activityLibraries).filter(name => name === retry?.requestedLibrary),
   ])];
   const reference = legacy ? '' : await libraryReferences(named);
+  const languagePrompt = language === 'typescript'
+    ? prompt.replace('JavaScript with JSDoc for strict checkJs', 'TypeScript with native type annotations')
+      .replace('TypeScript syntax is invalid.', 'Use strict TypeScript.')
+    : prompt;
   const system = retry?.kind === 'repair-code'
     ? 'Repair a classic JavaScript activity. Use JSDoc for typing and preserve the teaching behavior. Return JSON with only a code field.'
-    : legacy ? legacyPrompt : [prompt, reference].filter(Boolean).join('\n\n');
+    : legacy ? legacyPrompt : [languagePrompt, reference].filter(Boolean).join('\n\n');
   const messages = [{ role: 'system', content: system }, { role: 'user', content: brief }];
   if (retry?.kind === 'generate-with-library') {
     messages.push({ role: 'user', content: `The requested package "${retry.requestedLibrary}" is available.
@@ -181,9 +185,9 @@ function parseLibraryRequest(value) {
     ...(version && { requestedVersion: version }), ...(installed && { installedVersion: installed }) };
 }
 
-async function writeDraft(folder, draft) {
+async function writeDraft(folder, draft, language) {
   await Promise.all([
-    ...Object.entries(activityFiles).map(([key, file]) => writeFile(join(folder, file), draft[key])),
+    ...Object.entries(activityFiles).map(([key, file]) => writeFile(join(folder, key === 'code' && language === 'typescript' ? 'activity.ts' : file), draft[key])),
     writeFile(join(folder, 'view.yml'), stringify({
       title: draft.title, intro: draft.intro, type: 'engagement', frameHeight: '32rem',
       ...(draft.libraries?.length && { libraries: draft.libraries }),
@@ -244,8 +248,8 @@ async function checkBrowser(draft, folder, browser, fixture, checks, diagnostics
   }
 }
 
-async function checkDraft(draft, folder, browser, fixture, checks, diagnostics, deadline) {
-  const filename = join(folder, 'activity.js');
+async function checkDraft(draft, folder, browser, fixture, checks, diagnostics, deadline, language) {
+  const filename = join(folder, language === 'typescript' ? 'activity.ts' : 'activity.js');
   const types = ts.getPreEmitDiagnostics(activityProgram(filename, draft.code, draft.libraries))
     .filter(item => item.category === ts.DiagnosticCategory.Error);
   checks.typeErrors = types.length;
@@ -257,9 +261,10 @@ async function checkDraft(draft, folder, browser, fixture, checks, diagnostics, 
     getNewLine: () => '\n',
   };
   let code = draft.code;
-  if (draft.libraries?.length) {
+  if (language || draft.libraries?.length) {
     try {
-      code = await bundleActivity({ filename, source: code, libraries: draft.libraries });
+      code = await bundleActivity({ filename, source: code, libraries: draft.libraries ?? [] });
+      if (language) await writeFile(join(folder, 'activity.bundle.js'), code);
       checks.bundle = 'pass';
     } catch (error) {
       checks.bundle = 'fail';
@@ -306,7 +311,7 @@ async function readReference() {
 }
 
 async function attempt({ folder, model, brief, fixture, browser, reference, seed, retry,
-  modelDigest, deadline = Infinity }) {
+  modelDigest, language, deadline = Infinity }) {
   await mkdir(folder);
   const result = {
     passed: false,
@@ -333,7 +338,7 @@ async function attempt({ folder, model, brief, fixture, browser, reference, seed
     if (!draft) {
       result.requestedModel = model;
       if (modelDigest) result.model = { digest: modelDigest };
-      const response = await generate(model, brief, folder, retry, result, deadline);
+      const response = await generate(model, brief, folder, retry, result, deadline, language);
       result.generationSeconds = response.total_duration / 1e9;
       result.loadSeconds = response.load_duration / 1e9;
       result.outputTokens = response.eval_count;
@@ -367,9 +372,9 @@ async function attempt({ folder, model, brief, fixture, browser, reference, seed
     }
     result.libraries = draft.libraries ?? [];
     stage = 'artifacts';
-    await writeDraft(folder, draft);
+    await writeDraft(folder, draft, language);
     stage = 'validation';
-    const error = await checkDraft(draft, folder, browser, fixture, result.checks, result.diagnostics, deadline);
+    const error = await checkDraft(draft, folder, browser, fixture, result.checks, result.diagnostics, deadline, language);
     remaining(deadline);
     if (error) {
       result.failure = stage;
@@ -383,6 +388,10 @@ async function attempt({ folder, model, brief, fixture, browser, reference, seed
     result.error = error.cause ? `${error.message}: ${error.cause.message}` : error.message;
     result.diagnostics.push({ stage: result.failure, message: result.error });
     if (['response', 'truncated'].includes(stage)) result.checks.response = 'fail';
+  }
+  if (language && (result.failure === 'deadline' || performance.now() >= deadline)) {
+    result.failure = 'deadline';
+    result.passed = false;
   }
   result.seconds = (performance.now() - started) / 1000;
   await writeFile(join(folder, 'result.json'), JSON.stringify(result, null, 2));
@@ -536,6 +545,38 @@ async function runCase({ entry, row, folder, browser, tags, rows, escalationMode
   await saveResults(folder, rows);
 }
 
+const runIdPattern = /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.\d{3}Z-[a-f0-9]{8}$/;
+
+async function runLanguageComparison({ entry, folder, browser, rows, digest }) {
+  for (const [index, language] of entry.order.entries()) {
+    const row = { model: entry.model, name: entry.name, pairId: entry.pairId,
+      order: index + 1, language, attempts: [], finished: false };
+    rows.push(row);
+    await saveResults(folder, rows);
+    const path = `case-${rows.length}-attempt-1`;
+    console.log(`${entry.model} / ${entry.name} / ${language}`);
+    const { result, draft } = await attempt({
+      ...entry, browser, fixture: fixtures[entry.name], folder: join(folder, path),
+      language, modelDigest: digest, deadline: performance.now() + repairBudgetMs,
+    });
+    if (result.model?.digest && result.model.digest !== digest) {
+      result.failure = 'infrastructure';
+      result.error = 'Loaded model digest changed during the comparison';
+      result.passed = false;
+    }
+    const infrastructure = ['request', 'artifacts', 'infrastructure'].includes(result.failure);
+    row.attempts.push({ ...result, path });
+    row.selectedAttempt = draft ? path : null;
+    row.elapsedSeconds = result.seconds;
+    row.working = !infrastructure && result.failure !== 'deadline' && result.checks.fixture === 'pass';
+    row.passed = result.passed;
+    row.stopReason = infrastructure ? 'infrastructure-error' : result.failure ?? 'passed';
+    row.finished = true;
+    if (result.error) console.log(result.error);
+    await saveResults(folder, rows);
+  }
+}
+
 async function main() {
   const { values, positionals } = parseArgs({
     allowPositionals: true,
@@ -547,17 +588,23 @@ async function main() {
     },
   });
   const [command, ...args] = positionals;
+  if (command === 'describe') {
+    console.log(JSON.stringify({ fixtures: Object.keys(fixtures) }));
+    return;
+  }
   if (values.help) {
-    console.log(`Usage: mise run views:eval -- [--model NAME] [--fixture ${Object.keys(fixtures).join('|')}] [--control]
+    console.log(`Usage: node scripts/view-generation.mjs eval [--model NAME] [--fixture ${Object.keys(fixtures).join('|')}] [--control]
        mise run gen -- "PROMPT" [--model NAME]
        mise run gen -- --brief FILE
-       mise run views:replay -- RUN_ID...
+       node scripts/view-generation.mjs replay RUN_ID...
+       node scripts/view-generation.mjs compare [--model NAME] [--fixture NAME]
 Generation and eval accept --repair-policy none|once|loop. --repair and --no-repair are aliases for once and none.
 The loop and replay accept --escalation-model NAME.`);
     return;
   }
   const generating = command === 'generate';
   const replay = command === 'replay';
+  const comparing = command === 'compare';
   const inline = args.join(' ').trim();
   const policy = values['repair-policy'] ?? (values.repair === undefined
     ? (generating ? 'loop' : 'none') : values.repair ? 'once' : 'none');
@@ -567,28 +614,37 @@ The loop and replay accept --escalation-model NAME.`);
       (!replay && escalationModel !== undefined && (policy !== 'loop' || !escalationModel.trim())) ||
       (replay && (!args.length || values.model || values.fixture || values.control || values.brief ||
         values['repair-policy'] !== undefined || values.repair !== undefined || escalationModel?.trim() === '')) ||
-      (!generating && !replay && (command !== 'eval' || args.length)) ||
+      (!generating && !replay && ((!comparing && command !== 'eval') || args.length)) ||
+      (comparing && (values.control || values.model?.length > 1 || values.repair !== undefined || values['repair-policy'] !== undefined)) ||
       (generating && (Boolean(inline) === Boolean(values.brief) || values.fixture || values.control)) ||
       (!generating && values.brief) || (values.fixture && !Object.hasOwn(fixtures, values.fixture))) {
     throw new Error('Invalid arguments. Use --help for usage.');
   }
-  const models = values.model ?? (generating ? ['qwen3.5:4b'] : ['qwen3.5:4b', 'qwen3.5:9b']);
+  const models = values.model ?? (generating || comparing ? ['qwen3.5:4b'] : ['qwen3.5:4b', 'qwen3.5:9b']);
   const names = values.fixture ? [values.fixture] : Object.keys(fixtures);
   const reference = values.control ? await readReference() : undefined;
   const brief = values.brief ? await readFile(values.brief, 'utf8') : inline;
   const runtime = reference ? null : await ollama('/api/version', undefined, 3000).catch(() => null);
   const tags = reference ? [] : (await ollama('/api/tags', undefined, 3000)
-    .catch(error => { if (replay || escalationModel) throw error; return null; }))?.models ?? [];
+    .catch(error => { if (replay || comparing || escalationModel) throw error; return null; }))?.models ?? [];
   if (escalationModel && !installedDigest(tags, escalationModel)) {
     throw new Error(`Escalation model is not installed: ${escalationModel}`);
   }
   const { pairs, skipped } = replay ? await readReplay(args, tags) : { pairs: [], skipped: [] };
-  const cases = replay ? pairs : reference ? [{ model: 'Checked-in view', name: 'bezier', reference }] :
+  const digest = comparing ? installedDigest(tags, models[0]) : undefined;
+  if (comparing && !digest) throw new Error(`Model is not installed: ${models[0]}`);
+  const cases = comparing ? names.map((name, index) => ({
+    model: models[0], name, brief: fixtures[name].brief, pairId: String(index + 1),
+    order: randomInt(2) ? ['javascript', 'typescript'] : ['typescript', 'javascript'],
+  })) : replay ? pairs : reference ? [{ model: 'Checked-in view', name: 'bezier', reference }] :
     models.flatMap(model => generating ? [{ model, name: 'custom', brief }] :
       names.map(name => ({ model, name, brief: fixtures[name].brief })));
 
-  const folder = resolve('.view-generation', new Date().toISOString().replaceAll(':', '-') + '-' + randomUUID().slice(0, 8));
-  await mkdir(folder, { recursive: true });
+  const reservedId = process.env.VIZINT_EVAL_RUN_ID;
+  if (reservedId && (!runIdPattern.test(reservedId) || generating)) throw new Error('Invalid reserved evaluation run ID');
+  const folder = resolve('.view-generation', reservedId ??
+    new Date().toISOString().replaceAll(':', '-') + '-' + randomUUID().slice(0, 8));
+  if (!reservedId) await mkdir(folder, { recursive: true });
   const sources = await Promise.all([
     import.meta.url, new URL('./view-repair-policy.mjs', import.meta.url),
     new URL('./activity-libraries.mjs', import.meta.url), new URL('../package-lock.json', import.meta.url),
@@ -606,7 +662,7 @@ The loop and replay accept --escalation-model NAME.`);
   const status = git(['status', '--porcelain']);
   const metadata = {
     command, retryEnabled: replay || policy !== 'none', repairPolicy: replay ? undefined : policy,
-    escalationModel, runnerHash, checkHash,
+    escalationModel, runnerHash, checkHash, modelDigest: digest,
     git: { commit, dirty: status === null ? null : Boolean(status) },
     node: process.version, typescript: ts.version, ollama: runtime?.version,
     cases: cases.map(({ model, name, brief, pairId, source, order }) =>
@@ -629,6 +685,10 @@ The loop and replay accept --escalation-model NAME.`);
     metadata.browser = browser.version();
     await writeFile(join(folder, 'run.json'), JSON.stringify(metadata, null, 2));
     for (const entry of cases) {
+      if (comparing) {
+        await runLanguageComparison({ entry, folder, browser, rows, digest });
+        continue;
+      }
       if (!replay) {
         const row = { model: entry.model, name: entry.name, policy: entry.reference ? 'none' : policy,
           attempts: [], finished: false };
@@ -649,7 +709,7 @@ The loop and replay accept --escalation-model NAME.`);
   } finally {
     await browser.close();
   }
-  if (replay ? rows.some(row => row.stopReason === 'infrastructure-error') : rows.some(row => !row.passed)) {
+  if (replay || comparing ? rows.some(row => row.stopReason === 'infrastructure-error') : rows.some(row => !row.passed)) {
     process.exitCode = 1;
   }
 }

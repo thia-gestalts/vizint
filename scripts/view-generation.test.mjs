@@ -62,7 +62,8 @@ test('local runner with a mock Ollama server', async t => {
     for await (const chunk of request) body += chunk;
     const call = JSON.parse(body);
     requests.push(call);
-    const reply = replies.shift();
+    const queued = replies.shift();
+    const reply = typeof queued === 'function' ? queued(call) : queued;
     if (!reply) {
       response.writeHead(500).end('No mock reply');
       return;
@@ -203,6 +204,51 @@ test('local runner with a mock Ollama server', async t => {
     assert.equal(rows[0].selectedAttempt, 'case-1-attempt-1');
     assert.equal(rows[0].stopReason, 'deadline');
     assert.equal((await read('case-1-attempt-2/result.json')).failure, 'deadline');
+  });
+
+  await t.test('language comparison keeps identical conditions and separates fixture and type outcomes', async () => {
+    const reply = call => {
+      const typed = call.messages[0].content.includes('TypeScript with native type annotations');
+      const code = typed ? `const typed: string = 1;
+      const slider = document.querySelector('input');
+      const fp = document.querySelector('#false-positives');
+      const fn = document.querySelector('#false-negatives');
+      slider?.addEventListener('input', () => {
+        if (!fp || !fn) return;
+        fp.textContent = slider.valueAsNumber < 0.5 ? '2' : '1';
+        fn.textContent = slider.valueAsNumber < 0.5 ? '1' : '2';
+      });` : 'document.body.dataset.loaded = "true";';
+      return { ...draft, code, libraries: [], markup: `<input id="threshold" type="range" min="0" max="1" step="0.01">
+        <p id="false-positives">0</p><p id="false-negatives">0</p>` };
+    };
+    const result = await run(['compare', '--fixture', 'classifier-threshold'], [reply, reply]);
+    assert.equal(requests.length, 2);
+    assert.deepEqual(requests[0].options, requests[1].options);
+    assert.deepEqual(requests[0].messages[1], requests[1].messages[1]);
+    assert.equal(requests[0].model, requests[1].model);
+    assert.deepEqual(result.rows.map(row => row.language), result.settings.cases[0].order);
+    assert.deepEqual(result.rows.map(row => row.order), [1, 2]);
+    for (const row of result.rows) {
+      const [attempt] = row.attempts;
+      const typed = row.language === 'typescript';
+      assert.equal(row.working, typed);
+      assert.equal(row.passed, false);
+      assert.equal(attempt.checks.type, typed ? 'fail' : 'pass');
+      assert.equal(attempt.checks.bundle, 'pass');
+      const files = await readdir(join(root, result.id, attempt.path));
+      assert.ok(files.includes(typed ? 'activity.ts' : 'activity.js'));
+      assert.ok(files.includes('activity.bundle.js'));
+    }
+  });
+
+  await t.test('experiment times out a model call and still completes the other arm', async () => {
+    const accelerate = `const original = AbortSignal.timeout;
+      AbortSignal.timeout = ms => original(ms > 100000 && ms <= 120000 ? 150 : ms);`;
+    const { rows } = await run(['compare', '--fixture', 'classifier-threshold'], [{ hang: true }, draft],
+      0, ['--import', 'data:text/javascript,' + encodeURIComponent(accelerate)]);
+    assert.equal(rows[0].stopReason, 'deadline');
+    assert.equal(rows[0].finished, true);
+    assert.equal(rows[1].finished, true);
   });
 
   await t.test('paired replay rejects an installed digest mismatch', async () => {

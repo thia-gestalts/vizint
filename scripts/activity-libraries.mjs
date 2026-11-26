@@ -64,7 +64,7 @@ export async function bundleActivity({ filename, source, libraries }) {
           return builder.resolve(args.path, { kind: args.kind, resolveDir });
         });
         builder.onLoad({ filter: /.*/, namespace: 'activity-source' }, () => ({
-          contents: source, loader: 'js', resolveDir,
+          contents: source, loader: filename.endsWith('.ts') ? 'ts' : 'js', resolveDir,
         }));
       },
     }],

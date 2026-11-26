@@ -1,7 +1,8 @@
 {% extends "base.html" %}
+{% block title %}Run history · Vizint Admin{% endblock %}
 {% block content %}
-<h1 class="text-3xl font-semibold">Run history</h1>
-<form method="get" class="flex flex-wrap items-end gap-4">
+<h1 class="text-2xl font-semibold">Run history</h1>
+<form method="get" action="{{ url_for('history') }}" class="flex flex-wrap items-end gap-4">
   <label class="grid gap-1 text-sm font-medium">Model
     <input name="model" value="{{ model or '' }}" placeholder="All models" class="rounded border border-slate-300 bg-white px-3 py-2">
   </label>
@@ -16,7 +17,7 @@
 </form>
 {% for prompt, runs in groups %}
 <section class="space-y-3">
-  <h2 class="whitespace-pre-wrap break-words text-xl font-semibold">{{ prompt or 'Runs without a recorded prompt' }}</h2>
+  <h2 class="whitespace-pre-wrap break-words text-base font-semibold">{{ prompt or 'Runs without a recorded prompt' }}</h2>
 <ul class="divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white">
   {% for run in runs %}
   <li class="space-y-2 p-4">

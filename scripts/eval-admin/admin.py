@@ -3,23 +3,28 @@ import errno
 import json
 import socket
 import re
+import secrets
+import subprocess
 from pathlib import Path
 
 import uvicorn
 from a2wsgi import WSGIMiddleware
-from flask import Flask, abort, jsonify, render_template, request, send_file
+from flask import Flask, abort, g, jsonify, redirect, render_template, request, send_file, session, url_for
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 from starlette.applications import Starlette
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.routing import Mount, Route
 
+import jobs
+
 ROOT = Path(__file__).resolve().parents[2] / ".view-generation"
 RUN_ID = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.\d{3}Z-[a-f0-9]{8}")
 ATTEMPT = re.compile(r"case-[1-9]\d*-attempt-[1-9]\d*")
 ARTIFACTS = ("result.json", "request.json", "response.json", "activity.html",
-             "activity.css", "activity.js", "view.yml", "preview.png")
+             "activity.css", "activity.js", "activity.ts", "activity.bundle.js", "view.yml", "preview.png")
 flask = Flask(__name__)
+flask.secret_key = secrets.token_hex(32)
 mcp = FastMCP(
     "Vizint evaluation", stateless_http=True, json_response=True,
     streamable_http_path="/mcp",
@@ -84,6 +89,7 @@ def read_run(folder, include_artifacts=True):
         rows.append({**row, "attempts": attempts, "status": outcome})
     return {
         "id": folder.name, "settings": read_json(folder / "run.json", {}),
+        "job": jobs.job_state(folder),
         "cases": rows, "url": f"/runs/{folder.name}",
         "api_url": f"/api/runs/{folder.name}",
     }
@@ -192,8 +198,110 @@ def prompt_groups(runs, model=None):
     return sorted(groups.items(), key=lambda item: (item[0] is None, (item[0] or "").casefold()))
 
 
+def csrf_token():
+    if "csrf" not in session:
+        session["csrf"] = secrets.token_hex(32)
+    return session["csrf"]
+
+
+def check_csrf():
+    token = session.get("csrf")
+    if not token or not secrets.compare_digest(token, request.form.get("csrf", "")):
+        abort(403)
+
+
+def available_fixtures():
+    try:
+        return jobs.fixtures()
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return []
+
+
+@flask.post("/evaluations")
+def start_evaluation():
+    check_csrf()
+    action = request.form.get("action")
+    if action in ("compare", "eval"):
+        models, _ = jobs.models()
+        selected = list(dict.fromkeys(request.form.getlist("model")))
+        fixture = request.form.get("fixture")
+        if (not selected or any(model not in models or model.startswith("-") for model in selected)
+                or (action == "compare" and len(selected) != 1)
+                or (fixture and fixture not in available_fixtures())):
+            abort(400, "Choose an installed model and a valid fixture")
+        args = [action]
+        for model in selected:
+            args += ["--model", model]
+        if fixture:
+            args += ["--fixture", fixture]
+        if action == "eval" and request.form.get("repair") == "once":
+            args += ["--repair-policy", "once"]
+    elif action == "control":
+        args = ["eval", "--control"]
+    elif action == "replay":
+        ids = request.form.getlist("run_id")
+        if not ids:
+            abort(400, "Choose a source run")
+        try:
+            for run_id in ids:
+                run_folder(run_id)
+        except FileNotFoundError:
+            abort(400, "Invalid source run")
+        args = ["replay", *dict.fromkeys(ids)]
+    else:
+        abort(400, "Unknown evaluation action")
+    active, started = jobs.launch(ROOT, args, action)
+    if not active:
+        abort(409, "An evaluation is starting")
+    return redirect(f"/runs/{active}" + ("" if started else "?busy=1"), code=303)
+
+
+@flask.post("/runs/<run_id>/cancel")
+def cancel_evaluation(run_id):
+    check_csrf()
+    try:
+        folder = run_folder(run_id)
+    except FileNotFoundError:
+        abort(404)
+    if jobs.active_job(ROOT) != run_id or jobs.job_state(folder).get("status") not in jobs.ACTIVE:
+        abort(409, "This evaluation is not active")
+    (folder / "cancel.request").touch()
+    return redirect(f"/runs/{run_id}", code=303)
+
+
+def replay_source(run):
+    return run["settings"].get("command") in (None, "generate", "eval") and any(
+        case.get("model") != "Checked-in view" and case.get("status") in ("passed", "failed") for case in run["cases"]
+    )
+
+
+@flask.context_processor
+def admin_navigation():
+    if "active_job" not in g:
+        g.active_job = jobs.active_job(ROOT)
+    return {"active_job": g.active_job}
+
+
 @flask.get("/")
 def dashboard():
+    if request.args:
+        return redirect(url_for("history", **{
+            name: request.args[name] for name in ("model", "status") if name in request.args
+        }))
+    return redirect(url_for("evaluate"))
+
+
+@flask.get("/evaluate")
+def evaluate():
+    models, model_error = jobs.models()
+    sources = list_runs(limit=100)["runs"]
+    return render_template("evaluate.html", models=models, model_error=model_error,
+                           fixtures=available_fixtures(), csrf=csrf_token(),
+                           replay_sources=[run for run in sources if replay_source(run)])
+
+
+@flask.get("/runs")
+def history():
     model = request.args.get("model") or None
     status = request.args.get("status", "all")
     try:
@@ -228,15 +336,48 @@ def replay_summary(run):
     return {"totals": totals, "cutoffs": cutoffs}
 
 
+def language_summary(run):
+    if run["settings"].get("command") != "compare":
+        return None
+    languages = ("javascript", "typescript")
+    outcomes = {name: dict.fromkeys((*languages, "both", "neither"), 0) for name in ("working", "passed")}
+    incomplete = 0
+    by_pair = {}
+    for case in run["cases"]:
+        by_pair.setdefault(case.get("pairId"), {})[case.get("language")] = case
+    pairs = []
+    for pair in run["settings"].get("cases", []):
+        arms = by_pair.get(pair["pairId"], {})
+        pairs.append({"fixture": pair["fixture"], "arms": [arms[name] for name in pair["order"] if name in arms]})
+        if any(arms.get(name, {}).get("status") not in ("passed", "failed") or
+               arms[name].get("stopReason") == "infrastructure-error" for name in languages):
+            incomplete += 1
+            continue
+        for metric, counts in outcomes.items():
+            winners = [name for name in languages if arms[name].get(metric)]
+            key = "both" if len(winners) == 2 else winners[0] if winners else "neither"
+            counts[key] += 1
+    return {"outcomes": outcomes, "incomplete": incomplete, "pairs": pairs}
+
+
 @flask.get("/runs/<run_id>")
 def detail(run_id):
+    g.active_job = jobs.active_job(ROOT)
     try:
         run = get_run(run_id)
     except FileNotFoundError:
         abort(404)
     for case in run["cases"]:
         case["prompt"] = case_prompt(run_folder(run_id), run["settings"], case)
-    return render_template("detail.html", run=run, replay=replay_summary(run))
+    try:
+        with (run_folder(run_id) / "runner.log").open("rb") as log:
+            log.seek(max(0, log.seek(0, 2) - 12000))
+            tail = log.read().decode("utf-8", errors="replace")
+    except OSError:
+        tail = ""
+    return render_template("detail.html", run=run, replay=replay_summary(run), comparison=language_summary(run),
+                           active=run["job"].get("status") in jobs.ACTIVE, log=tail, replay_source=replay_source(run),
+                           busy=request.args.get("busy"), csrf=csrf_token())
 
 
 @flask.get("/api/runs")

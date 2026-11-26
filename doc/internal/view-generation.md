@@ -7,17 +7,9 @@ the executable specified in `CHROME_PATH`. Set `VIZINT_OLLAMA_URL` to override
 
 ```sh
 mise run gen "Show how changing the mass affects a spring's oscillation"
-mise run views:eval-control
-mise run views:eval --fixture bezier --model qwen3.5:4b --repair
-mise run views:eval --fixture roc-auc --model qwen3.5:9b --repair
-mise run views:eval
 ```
 
 Use `mise run gen --brief /path/to/brief.txt` for a prompt saved in a file.
-
-The control runs the checked-in Bézier view without Ollama. The default
-benchmark runs Bézier, spring–mass, and ROC-AUC on both Qwen models,
-sequentially. Repeat `--model` to compare other installed models.
 
 `gen` runs a repair loop by default. It allows three follow-up calls and
 120 seconds of repair time. Repairs use the first failing check as feedback
@@ -27,23 +19,8 @@ for escalation. The runner keeps every attempt and selects the strongest
 checked draft. Generation exits nonzero if no attempt passes all available
 checks.
 
-`views:eval` defaults to one generation per case. Both commands accept
-`--repair-policy none|once|loop`. The aliases `--no-repair` and `--repair`
-choose `none` and the legacy `once` policy.
-
-Replay failed first attempts from one or more saved runs:
-
-```sh
-mise run views:replay RUN_ID [RUN_ID ...]
-```
-
-Replay checks the saved draft once and gives both policies the same starting
-point. The arms run serially in randomized order, with a 120-second limit each.
-The run detail shows paired automated outcomes, time to pass, skipped inputs,
-and incomplete pairs. Fixture passes include behavior assertions. For custom
-briefs, review the interaction and teaching content before counting a draft as
-usable. Replay exits successfully after a comparison even if neither policy
-produces a passing draft. An empty replay or an infrastructure failure exits nonzero.
+Generation accepts `--repair-policy none|once|loop`. The aliases
+`--no-repair` and `--repair` choose `none` and the legacy `once` policy.
 
 Start the local dashboard with `mise run views:admin` and open
 the URL printed at startup. The default is http://127.0.0.1:8765. If that
@@ -54,6 +31,25 @@ the MCP URLs, and the JSON API examples below.
 The admin task uses uv to install its locked Python dependencies on first run.
 The dashboard groups runs alphabetically by prompt, with newer runs first
 within each prompt. Open a run to compare attempts, timings, screenshots, and diagnostics.
+Use the admin header to switch between **Evaluate** and **Run history**.
+While an evaluation is running, **Active evaluation** opens its progress
+page. **Evaluate** has four tools:
+
+- **Compare JavaScript and TypeScript** generates each selected fixture once
+  per language with the same model and a 120-second limit per arm. The detail
+  page shows paired outcomes for working activities and strict-check passes.
+  TypeScript source and bundles are downloadable experiment artifacts.
+- **Run fixture evaluation** runs the selected models on one fixture or all
+  fixtures. Use **Allow one repair** to include the legacy retry.
+- **Check Bézier control** validates a checked-in view and works without Ollama.
+- **Replay repair policies** compares once and loop on the same saved first
+  attempt. Select source runs in **Evaluate** or launch replay from a run’s
+  detail page. The arms run serially in randomized order with 120 seconds each.
+
+The run opens as soon as it is queued. The detail page shows progress,
+artifacts, and runner output. You can cancel an active job there. The admin
+runs one evaluation at a time to keep the comparisons serial.
+
 Each run lives under the gitignored `.view-generation/` folder
 with requests, responses, draft files, and JSON results. Use `run.json`
 to compare the Git commit, working-tree dirty flag, runner fingerprint,

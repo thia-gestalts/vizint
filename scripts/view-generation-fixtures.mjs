@@ -23,6 +23,22 @@ function near(actual, expected, tolerance = 1) {
 }
 
 export const fixtures = {
+  'classifier-threshold': {
+    brief: `Teach how a classifier threshold affects false positives and false negatives.
+Use positive examples with scores 0.9, 0.6 and 0.2, and negative examples with
+scores 0.8, 0.4 and 0.1. Predict positive when the score is at least the threshold.
+Plot the examples by score and show a movable threshold marker. Provide a labeled
+range id="threshold" from 0 to 1, step 0.01, and output the numeric counts in visible
+elements id="false-positives" and id="false-negatives". Update the plot and counts
+when the threshold changes.`,
+    async check(frame) {
+      for (const [threshold, fp, fn] of [[0.3, 2, 1], [0.7, 1, 2]]) {
+        await setRange(frame, '#threshold', threshold);
+        assert.equal(await readNumber(frame.locator('#false-positives')), fp);
+        assert.equal(await readNumber(frame.locator('#false-negatives')), fn);
+      }
+    },
+  },
   'roc-auc': {
     brief: `Teach binary-classifier evaluation with an SVG ROC curve and AUC.
 Use a labeled select id="ranking" with options perfect, tied and reversed.
