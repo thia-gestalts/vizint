@@ -18,11 +18,11 @@ const relations = [
   ['prerequisites', 'Helpful background', 'Helpful background for'],
 ];
 
-function recordPath({ kind, id }) {
+export function recordPath({ kind, id }) {
   return `learn/${kind}/${createHash('sha256').update(id).digest('hex')}/`;
 }
 
-function viewPath(entry, exercise) {
+export function viewPath(entry, exercise) {
   return `${entry.slug}/${exercise ? '#' + exerciseAnchor(exercise) : ''}`;
 }
 

@@ -6,7 +6,8 @@
     "build": "node scripts/build.mjs && tailwindcss -i src/site.css -o dist/site.css --minify",
     "previews": "node scripts/capture-previews.mjs",
     "check:views": "node scripts/check-views.mjs",
-    "start": "node scripts/serve.mjs"
+    "start": "node scripts/serve.mjs",
+    "learning": "node scripts/learning.mjs"
   },
   "devDependencies": {
     "@tailwindcss/cli": "^4.3.5",
