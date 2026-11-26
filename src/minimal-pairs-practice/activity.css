@@ -1,0 +1,49 @@
+[hidden] { display: none !important; }
+main { display: grid; gap: 1rem; }
+p { margin: 0; }
+button {
+  padding: .55rem .8rem;
+  border: 1px solid #a3b4d4;
+  border-radius: .5rem;
+  background: #f2f5ff;
+  color: #17253c;
+}
+button:hover:not(:disabled) { background: #e1e8ff; }
+#languages, .controls { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+#languages button[aria-pressed="true"] { background: #344dc9; border-color: #344dc9; color: white; }
+#status:empty, #audio-status:empty, #feedback:empty { display: none; }
+#status, #audio-status, #feedback, footer { color: #44536a; font-size: .875rem; }
+#retry-load { justify-self: start; }
+.player {
+  padding: clamp(.75rem, 3vw, 1.15rem);
+  display: grid;
+  gap: .75rem;
+  background: #f5f7fc;
+  border: 1px solid #d5def0;
+  border-radius: .75rem;
+}
+.player-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .65rem; }
+#prompt { font-weight: 650; }
+.controls button { font-size: .875rem; }
+.controls button:disabled { opacity: .55; }
+audio { display: block; width: 100%; }
+#native { text-align: center; font-size: 1.1rem; }
+#answers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; margin-top: .9rem; }
+#answers button { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: .5rem; text-align: center; min-height: 4.5rem; }
+.spelling { grid-column: 2; font-size: clamp(1.05rem, 3vw, 1.5rem); line-height: 1.35; overflow-wrap: anywhere; }
+mark { background: #ffdc91; color: inherit; border-radius: .15em; }
+kbd { border: 1px solid #a3b4d4; border-radius: .2rem; padding: .1rem .25rem; font-size: .75rem; }
+#answers .wrong { background: #fff2ee; border-color: #aa4d43; }
+#answers .correct { background: #e7f5ed; border-color: #3f8664; }
+#feedback { margin-top: .75rem; }
+footer { display: flex; flex-wrap: wrap; align-items: baseline; gap: .25rem .45rem; }
+footer button { padding: 0; color: #344dc9; border: 0; background: transparent; text-decoration: underline; }
+dialog { color: inherit; width: min(28rem, calc(100% - 2rem)); max-height: calc(100% - 2rem); border: 1px solid #a3b4d4; border-radius: .75rem; padding: 1rem; }
+dialog::backdrop { background: #17253c66; }
+dialog h2 { margin: 0 0 .5rem; font-size: 1.2rem; }
+dialog .controls { margin-top: .75rem; }
+@media (max-width: 420px) {
+  #answers { grid-template-columns: 1fr; }
+  #answers button { min-height: 3.5rem; }
+}
+@media (pointer: coarse) { kbd { visibility: hidden; } }

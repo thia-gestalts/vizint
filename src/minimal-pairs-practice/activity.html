@@ -1,0 +1,36 @@
+<main>
+  <div id="languages" role="group" aria-label="Practice language">
+    <button type="button" data-code="vie" aria-pressed="false">Vietnamese</button>
+    <button type="button" data-code="cmn" aria-pressed="false">Mandarin</button>
+  </div>
+  <p id="status" role="status">Choose a language to start practicing.</p>
+  <button type="button" id="retry-load" hidden>Retry loading</button>
+  <section id="practice" aria-label="Listening exercise" hidden>
+    <div class="player">
+      <div class="player-heading">
+        <p id="prompt" tabindex="-1">Which spelling matches the audio?</p>
+        <div class="controls">
+          <button type="button" id="replay">Replay <kbd aria-hidden="true">Space</kbd></button>
+          <button type="button" id="hide-clip">Hide clip</button>
+        </div>
+      </div>
+      <audio controls preload="auto" aria-label="Practice clip"></audio>
+      <p id="audio-status" role="status"></p>
+      <p id="native" lang="zh" hidden></p>
+    </div>
+    <div id="answers" role="group" aria-labelledby="prompt"></div>
+    <p id="feedback" role="status"></p>
+  </section>
+  <footer id="credits" hidden>
+    Audio from <button type="button" data-credit="dataset"></button>
+    <button type="button" id="open-license" aria-haspopup="dialog">View license</button>
+  </footer>
+  <dialog id="license" aria-labelledby="license-title">
+    <h2 id="license-title">Dataset license</h2>
+    <p id="notice"></p>
+    <div class="controls">
+      <button type="button" data-credit="license"></button>
+      <button type="button" id="close-license">Close</button>
+    </div>
+  </dialog>
+</main>

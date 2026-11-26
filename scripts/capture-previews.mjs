@@ -12,13 +12,14 @@ const build = () => execFileSync(process.execPath, [process.env.npm_execpath, 'r
   stdio: 'inherit',
 });
 
-async function capturePreview(page, origin, { slug, previewReady }, folder) {
-  const response = await page.goto(new URL(`${slug}/`, origin).href);
+async function capturePreview(page, origin, { slug, previewReady, previewHash = '' }, folder) {
+  const response = await page.goto(new URL(`${slug}/${previewHash}`, origin).href);
   if (!response?.ok()) throw new Error(`Could not load ${slug}.`);
   const iframe = page.locator('#activity iframe');
   await iframe.evaluate((element, size) => {
     element.style.width = `${size.width}px`;
     element.style.height = `${size.height}px`;
+    element.style.minHeight = element.style.height;
   }, { width, height });
   await iframe.contentFrame().locator(previewReady ?? 'body').first().waitFor();
   const screenshot = await iframe.screenshot({ animations: 'disabled' });

@@ -1,0 +1,21 @@
+title: Minimal pairs practice
+intro: Listen to Vietnamese or Mandarin speech and choose the spelling with the tone you heard.
+languages:
+  vie:
+    name: Vietnamese
+    topic: Vietnamese tones
+    tones:
+      ngang: ngang
+      huyen: huyền
+      sac: sắc
+      hoi: hỏi
+      nga: ngã
+      nang: nặng
+  cmn:
+    name: Mandarin
+    topic: Mandarin tones
+    tones:
+      tone1: first tone
+      tone2: second tone
+      tone3: third tone
+      tone4: fourth tone

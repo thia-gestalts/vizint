@@ -1,3 +1,4 @@
+import { minimalPairsEntry } from './minimal-pairs-practice/content.mjs';
 import { worldMapEntry } from './world-map/content.mjs';
 
 export const app = 'example.thia.vizint';
@@ -37,6 +38,7 @@ const roundingQuestion = question('bc64e437-1e88-4abc-9c09-b94e04f4e298',
 
 export const entries = [
   worldMapEntry(app),
+  minimalPairsEntry(app),
   {
     slug: 'bezier',
     activity: 'bezier-explorer',
