@@ -1,6 +1,7 @@
 order: 10
 title: World Map
 type: attempt
+patterns: [map, d3-geo, click-targets, custom-host]
 previewReady: "#answers button"
 intro: Find and identify countries. Practice adapts as you learn their locations.
 frameHeight: max(28rem, calc(100dvh - 5rem))

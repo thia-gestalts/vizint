@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% import "macros.html" as m with context %}
+{% block title %}{{ run.hypothesis }} · Vizint evaluations{% endblock %}
+{% block content %}
+<header>
+  <p class="eyebrow">{{ m.origin(run) }} · <span class="mono">{{ run.id }}</span></p>
+  <h1>{{ run.hypothesis }}</h1>
+  <div class="row">
+    {{ m.status(run.status) }}
+    <div class="progress" role="progressbar" aria-label="Samples finished" aria-valuemin="0" aria-valuemax="{{ run.progress.planned }}" aria-valuenow="{{ run.progress.done }}">
+      <span style="width: {{ (100 * run.progress.done / run.progress.planned) if run.progress.planned else 0 }}%"></span></div>
+    <span class="muted small">{{ run.progress.done }} of {{ run.progress.planned }} samples</span>
+    <span class="spacer"></span>
+    {% if active %}
+    <form method="post" action="{{ url_for('cancel_page', run_id=run.id) }}">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><button class="button">Cancel run</button></form>
+    {% endif %}
+    <a class="button" href="{{ url_for('new_page', **{'from': run.id}) }}">Run again…</a>
+    <a class="button" href="{{ run.api_url }}">JSON</a>
+  </div>
+  {% if run.job.error %}<p class="error">{{ run.job.error }}</p>{% endif %}
+  {% if run.status == 'failed' %}<p class="error">The runner stopped with an infrastructure error. See the runner output below.</p>{% endif %}
+</header>
+
+<section class="card table-scroll" aria-labelledby="scoreboard">
+  <h2 id="scoreboard">Scoreboard</h2>
+  {% set board = run.scoreboard %}
+  <table>
+    <thead><tr><th scope="col">Arm</th>
+      {% for fixture in board.fixtures %}<th scope="col">{{ fixture }}</th>{% endfor %}
+      <th scope="col">All {{ 'targets' if board.fixtures | length > 1 else '' }}</th></tr></thead>
+    <tbody>
+      {% for arm in board.arms %}
+      <tr>
+        <th scope="row"><span style="color: var(--text)">{{ arm.id }} · {{ arm.label }}</span>
+          <div class="muted small" style="font-weight: 400">{{ arm.arm.samples }} sample{{ 's' if arm.arm.samples != 1 }} · T {{ arm.arm.temperature }}{% if arm.arm.repair != 'none' %} · repair {{ arm.arm.repair }}{% endif %}</div></th>
+        {% for cell in arm.cells %}
+        <td>{% if not cell.planned %}<span class="muted">n/a</span>{% else %}
+          {{ m.tier(cell.best) }}
+          {{ m.bar(cell.tally, cell.planned) }}
+          <div class="muted small">{% for t in tiers if cell.tally[t] %}{{ cell.tally[t] }} {{ t }}{% if not loop.last %}, {% endif %}{% else %}{{ cell.done }}/{{ cell.planned }} done{% endfor %}</div>
+          {% endif %}</td>
+        {% endfor %}
+        <td>{{ m.bar(arm.tally, arm.planned) }}
+          <div class="small"><b>{{ arm.tally.publishable }}</b> publishable · <b>{{ arm.tally.publishable + arm.tally.working }}</b> working{% if 'custom' in board.fixtures %} · <b>{{ arm.accepted }}</b> accepted{% endif %} <span class="muted">of {{ arm.done }}{% if arm.done != arm.planned %} ({{ arm.planned }} planned){% endif %}</span></div>
+          <div class="muted small">median type errors {{ arm.medianTypeErrorsRaw if arm.medianTypeErrorsRaw is not none else '–' }} raw → {{ arm.medianTypeErrors if arm.medianTypeErrors is not none else '–' }} after codemod · median {{ arm.medianSeconds if arm.medianSeconds is not none else '–' }} s</div></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div style="margin-top: .75rem">{{ m.legend() }}</div>
+</section>
+
+<section class="card table-scroll" aria-labelledby="samples">
+  <h2 id="samples">Samples</h2>
+  {% if run.samples %}
+  <table>
+    <thead><tr><th scope="col">Preview</th><th scope="col">Sample</th><th scope="col">Tier</th><th scope="col">Checks</th><th scope="col">First problem</th></tr></thead>
+    <tbody>
+      {% for sample in run.samples | sort(attribute='fixture') %}
+      <tr class="clickable">
+        <td>{% if sample.preview %}<a href="{{ sample.url }}"><img class="thumb" src="{{ sample.preview }}" alt="Preview of sample {{ sample.arm }}{{ sample.sample }}" loading="lazy"></a>{% endif %}</td>
+        <td><a href="{{ sample.url }}">{{ sample.fixture }} · {{ sample.arm }} #{{ sample.sample }}</a>
+          <div class="muted small">{{ sample.attempts }} attempt{{ 's' if sample.attempts != 1 }}{% if sample.seconds %} · {{ sample.seconds | round(1) }} s{% endif %}{% if sample.example and sample.example.slug %} · example {{ sample.example.slug }}{% endif %}</div></td>
+        <td>{{ m.tier(sample.tier) }}</td>
+        <td>{{ m.checks(sample.checks) }}</td>
+        <td class="small">{% if sample.firstDiagnostic %}<span class="muted">{{ sample.firstDiagnostic.stage }}:</span> {{ sample.firstDiagnostic.message | truncate(160) }}{% elif not sample.finished %}<span class="muted">in progress</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="muted">No samples yet.</p>{% endif %}
+</section>
+
+<section class="card" id="notes" aria-labelledby="notes-heading">
+  <h2 id="notes-heading">Notes</h2>
+  <div class="notes">
+    {% for note in run.notes %}
+    <article class="note {{ note.author.kind }}">
+      <div class="small"><b>{{ 'Agent · ' ~ note.author.name if note.author.kind == 'agent' else 'You' }}</b> <span class="muted">{{ note.at }}</span></div>
+      <p>{{ note.text }}</p>
+    </article>
+    {% else %}
+    <p class="muted small">No notes yet. Agents can add them with <code>add_note</code> and read yours with <code>get_run</code>.</p>
+    {% endfor %}
+    <form method="post" action="{{ url_for('note_page', run_id=run.id) }}" class="stack">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label class="field">Add a note <span class="hint">A conclusion, a doubt, or what to try next.</span>
+        <textarea name="text" required maxlength="4000"></textarea></label>
+      <div><button class="button">Add note</button></div>
+    </form>
+  </div>
+</section>
+
+<details class="card">
+  <summary>Settings and provenance</summary>
+  <div class="grid-2">
+    <dl class="facts">
+      <dt>Target</dt><dd>{{ run.spec.fixtures | join(', ') if run.spec.fixtures else 'Custom brief' }}</dd>
+      {% if run.spec.brief %}<dt>Brief</dt><dd>{{ run.spec.brief }}</dd>{% endif %}
+      {% for arm in run.spec.arms %}<dt>Arm {{ arm.id }}</dt><dd>{{ arm.model }} · examples {{ arm.examples }} · {{ arm.samples }} samples · T {{ arm.temperature }} · repair {{ arm.repair }} · {{ arm.format }}</dd>{% endfor %}
+      {% if run.order %}<dt>Arm order</dt><dd>{% for fixture, order in run.order.items() %}{{ fixture }}: {{ order | join(' → ') }}{% if not loop.last %}; {% endif %}{% endfor %}</dd>{% endif %}
+    </dl>
+    <dl class="facts">
+      {% set p = run.provenance %}
+      <dt>Git</dt><dd class="mono">{{ (p.git or {}).commit or '–' }}{% if (p.git or {}).dirty %} (dirty){% endif %}</dd>
+      <dt>Runner</dt><dd class="mono">{{ (p.runnerHash or '')[:12] }}</dd>
+      <dt>Checks</dt><dd class="mono">{{ (p.checkHash or '')[:12] }}</dd>
+      <dt>Models</dt><dd class="mono">{% for name, digest in (p.models or {}).items() %}{{ name }} {{ (digest or '')[:12] }}{% if not loop.last %}, {% endif %}{% endfor %}</dd>
+      <dt>Runtime</dt><dd>Node {{ p.node }} · TypeScript {{ p.typescript }} · Ollama {{ p.ollama or '–' }} · {{ p.browser or '' }}</dd>
+    </dl>
+  </div>
+</details>
+
+{% if log %}
+<details class="card"{% if run.status == 'failed' %} open{% endif %}>
+  <summary>Runner output</summary>
+  <pre>{{ log }}</pre>
+</details>
+{% endif %}
+
+{% if active %}
+<script>
+  const reload = () => { if (!document.hidden) location.reload(); };
+  setTimeout(reload, 4000);
+  document.addEventListener('visibilitychange', reload);
+</script>
+{% endif %}
+{% endblock %}

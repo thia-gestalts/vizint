@@ -6,6 +6,7 @@ title: Mean squared error (MSE)
 intro: Drag the three points up or down. Each dashed segment shows the distance
   to the prediction. Square those distances and average them to get the MSE.
 type: engagement
+patterns: [svg-plot, drag-handles, keyboard-handles, live-readout, shared-drag-helper]
 learning:
   records:
     - kind: topic

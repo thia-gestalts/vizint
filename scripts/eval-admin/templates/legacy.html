@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% import "macros.html" as m with context %}
+{% block title %}Legacy run {{ run.id }} · Vizint evaluations{% endblock %}
+{% block content %}
+<header>
+  <p class="eyebrow"><span class="badge">Legacy</span> <span class="mono">{{ run.id }}</span></p>
+  <h1>{{ run.hypothesis }}</h1>
+  <p class="muted">This run predates arms and scoreboards. It is read-only. Tiers are recomputed from its stored checks, without the codemod.</p>
+</header>
+{% for case in run.cases %}
+<section class="card">
+  <div class="row"><h2 style="margin: 0">{{ case.model }} / {{ case.fixture }}</h2>{{ m.tier(case.tier) }}{% if case.policy %}<span class="muted small">{{ case.policy }}</span>{% endif %}</div>
+  <table style="margin-top: .5rem">
+    <tbody>
+      {% for attempt in case.attempts %}
+      <tr>
+        <td>{% if attempt.artifacts['preview.png'] %}<img class="thumb" src="{{ attempt.artifacts['preview.png'] }}" alt="Preview" loading="lazy">{% endif %}</td>
+        <td class="small">{{ attempt.path }}<div class="muted">{{ attempt.strategy }}</div></td>
+        <td>{{ m.tier(attempt.tier) }}</td>
+        <td>{{ m.checks(attempt.checks or {}) }}</td>
+        <td class="small">{% for name, link in attempt.artifacts.items() if name != 'preview.png' %}<a href="{{ link }}?view=1">{{ name }}</a>{% if not loop.last %} · {% endif %}{% endfor %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endfor %}
+<details class="card"><summary>Settings</summary><pre>{{ run.settings | tojson(indent=2) }}</pre></details>
+{% endblock %}

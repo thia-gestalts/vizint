@@ -4,7 +4,7 @@ import { validateLibraries } from '../scripts/activity-libraries.mjs';
 
 export const app = 'example.thia.vizint';
 
-const fields = 'order activity title intro type frameHeight source sharedScript libraries previewReady previewHash customHost media assets collapseExercises learning learningModule'.split(' ');
+const fields = 'order activity title intro type frameHeight source sharedScript libraries previewReady previewHash patterns customHost media assets collapseExercises learning learningModule'.split(' ');
 const relations = 'topics teaches answers prerequisites practices assesses'.split(' ');
 const segment = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -59,6 +59,10 @@ export async function loadCatalog(root = new URL('views/', import.meta.url)) {
       }
       if (data.customHost) requirePath('host.mjs');
       if ('libraries' in data) validateLibraries(data.libraries);
+      if ('patterns' in data && (!Array.isArray(data.patterns) || new Set(data.patterns).size !== data.patterns.length ||
+          data.patterns.some(pattern => typeof pattern !== 'string' || !segment.test(pattern)))) {
+        throw new Error('Expected patterns to be unique kebab-case strings');
+      }
       if ('assets' in data) {
         if (!segment.test(data.assets) || typeof data.assets !== 'string') throw new Error('Invalid assets directory');
         requirePath(data.assets + '/', true);

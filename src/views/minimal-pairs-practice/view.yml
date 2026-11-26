@@ -1,5 +1,6 @@
 order: 20
 type: attempt
+patterns: [host-questions, audio, multiple-choice, custom-host]
 title: Minimal pairs practice
 intro: Listen to Vietnamese or Mandarin speech and choose the spelling with the
   tone you heard.

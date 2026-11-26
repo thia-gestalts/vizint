@@ -1,16 +1,32 @@
 export const repairBudgetMs = 120_000;
 export const repairCallLimit = 3;
+export const repairPolicies = ['none', 'once', 'loop'];
+export const tiers = ['broken', 'starts', 'working', 'publishable'];
+
+/**
+ * publishable: interaction checks and strict types pass.
+ * working: the fixture's interaction checks pass.
+ * starts: the activity loads without errors (custom briefs have no interaction checks).
+ */
+export function tierOf(checks) {
+  if (!checks || checks.syntax !== 'pass' || checks.startup !== 'pass') return 'broken';
+  if (checks.fixture !== 'pass') return 'starts';
+  return checks.type === 'pass' ? 'publishable' : 'working';
+}
+
+/** Accepted by every check available for the brief. */
+export function accepted(checks) {
+  const tier = tierOf(checks);
+  return tier === 'publishable' || (tier === 'starts' && checks.fixture === 'unverified' && checks.type === 'pass');
+}
 
 export function preferredCandidate(current, candidate) {
-  if (candidate.passed) return true;
   if (!candidate.checks) return false;
   if (!current.checks) return true;
-  const stages = ['syntax', 'startup', 'fixture'];
-  if (regressions(current, candidate).length) {
-    return false;
-  }
-  return stages.some(stage => candidate.checks[stage] === 'pass' && current.checks[stage] !== 'pass') ||
-    candidate.checks.typeErrors < current.checks.typeErrors;
+  const rank = result => tiers.indexOf(tierOf(result.checks));
+  if (rank(candidate) !== rank(current)) return rank(candidate) > rank(current);
+  if (regressions(current, candidate).length) return false;
+  return (candidate.checks.typeErrors ?? Infinity) < (current.checks.typeErrors ?? Infinity);
 }
 
 export function regressions(current, candidate) {
@@ -25,28 +41,18 @@ function failureSignature(result) {
   return [result.failure, failure?.stage, failure?.code ?? line].join(':');
 }
 
+/** The next follow-up call for a sample, or null to stop. */
 export function nextRepair(policy, best, latest, calls, escalated, previous) {
-  if (policy === 'loop' && latest.failure === 'library-request' && latest.libraryRequest.available) {
+  if (latest.failure === 'library-request' && latest.libraryRequest?.available) {
     if (previous?.libraryRequest?.package === latest.libraryRequest.package) return null;
     return { kind: 'generate-with-library', think: false };
   }
   if (policy === 'none' || best.passed || !['response', 'truncated', 'validation'].includes(latest.failure)) {
     return null;
   }
-  if (policy === 'once') {
-    if (calls) return null;
-    if (latest.failure === 'truncated') return { kind: 'retry-truncated' };
-    return latest.failure === 'validation' ? { kind: 'repair-code' } : null;
-  }
+  const kind = ['response', 'truncated'].includes(best.failure) || !best.checks ? 'regenerate' : 'repair';
+  if (policy === 'once') return calls ? null : { kind, think: false };
   const repeated = previous && failureSignature(previous) === failureSignature(latest);
   if (escalated && (best !== latest || repeated)) return null;
-  const think = calls > 0 && !escalated && (best !== latest || repeated);
-  if (['response', 'truncated'].includes(best.failure)) return { kind: 'regenerate', think };
-  const failure = best.diagnostics?.[0];
-  if (think && failure?.stage === 'startup' && /(?:THREE|katex|MathJax|d3|Chart|React|p5|Plotly) is not defined/i.test(failure.message)) {
-    return { kind: 'regenerate', think };
-  }
-  const crossFile = failure && (['bundle', 'fixture', 'startup'].includes(failure.stage) ||
-    /(?:element|cannot find name)/i.test(failure.message));
-  return { kind: think || crossFile ? 'repair-activity' : 'repair-js', think };
+  return { kind, think: calls > 0 && !escalated && (best !== latest || repeated) };
 }

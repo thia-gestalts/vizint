@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% import "macros.html" as m with context %}
+{% block content %}
+<div class="row">
+  <h1>Runs</h1>
+  <span class="spacer"></span>
+  <a class="button primary" href="{{ url_for('new_page') }}">New run</a>
+</div>
+<nav class="row small" aria-label="Filter by origin">
+  {% for value, label in [('all', 'All runs'), ('human', 'Started by you'), ('agent', 'Started by agents')] %}
+  <a href="{{ url_for('runs_page', origin=value) }}"{% if origin == value %} aria-current="true" style="font-weight: 600; color: var(--text)"{% endif %}>{{ label }}</a>
+  {% endfor %}
+</nav>
+
+<section class="card table-scroll">
+  {% if runs %}
+  <table>
+    <thead><tr><th scope="col">Hypothesis</th><th scope="col">Started by</th><th scope="col">Result</th><th scope="col">Status</th></tr></thead>
+    <tbody>
+      {% for run in runs %}
+      <tr>
+        <td><a href="{{ run.url }}">{{ run.hypothesis }}</a>
+          <div class="muted small">{{ run.spec.fixtures | join(', ') if run.spec.fixtures else 'Custom brief' }}
+            · {% for arm in run.spec.arms %}{{ arm.id }} {{ arm.label }}{% if not loop.last %} / {% endif %}{% endfor %}</div>
+          <div class="muted small mono">{{ run.id }}</div></td>
+        <td>{{ m.origin(run) }}{% if run.notes %}<div class="muted small">{{ run.notes | length }} note{{ 's' if run.notes | length != 1 }}</div>{% endif %}</td>
+        <td class="small">{% for line in run.headline %}<div>{{ line }}</div>{% endfor %}</td>
+        <td>{{ m.status(run.status) }}<div class="muted small">{{ run.progress.done }}/{{ run.progress.planned }} samples</div></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p>No runs{% if origin != 'all' %} with this origin{% endif %} yet. <a href="{{ url_for('new_page') }}">Start one</a>, or ask an agent to call <code>start_run</code>.</p>
+  {% endif %}
+</section>
+
+{% if legacy %}
+<details class="card">
+  <summary>Legacy runs ({{ legacy | length }})</summary>
+  <p class="muted small">Runs from the earlier runner, read-only. Tiers are recomputed from their stored checks.</p>
+  <table>
+    <tbody>
+      {% for run in legacy %}
+      <tr><td class="mono small"><a href="{{ run.url }}">{{ run.id }}</a></td><td class="small">{{ run.hypothesis }}</td>
+        <td class="small">{% for line in run.headline %}<div>{{ line }}</div>{% endfor %}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</details>
+{% endif %}
+{% endblock %}

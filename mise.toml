@@ -26,6 +26,14 @@ run = "npm run previews"
 description = "Generate a draft view from a prompt with local Ollama"
 run = "node scripts/view-generation.mjs generate"
 
+[tasks."views:eval"]
+description = "Run an evaluation spec, or fixture arms from flags, with local Ollama"
+run = "node scripts/view-generation.mjs"
+
+[tasks."views:codemod-report"]
+description = "Re-check saved drafts with the typing codemod, without model calls"
+run = "node scripts/activity-codemod.mjs --report"
+
 [tasks."views:admin"]
 description = "Serve the local evaluation dashboard and agent API"
 run = "uv run --project scripts/eval-admin --locked python scripts/eval-admin/admin.py"

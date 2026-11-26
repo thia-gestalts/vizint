@@ -1,0 +1,37 @@
+{% macro tier(value) -%}
+  {%- if value -%}<span class="badge {{ value }}">{{ value }}</span>{%- else -%}<span class="badge">pending</span>{%- endif -%}
+{%- endmacro %}
+
+{% macro origin(run) -%}
+  <span class="badge {{ (run.origin or {}).kind or 'human' }}">{{ run.originLabel }}</span>
+{%- endmacro %}
+
+{% macro status(value) -%}
+  <span class="badge status-{{ value }}">{{ value }}</span>
+{%- endmacro %}
+
+{% macro bar(tally, total) -%}
+  {%- if total -%}
+  <div class="bar" role="img" aria-label="{% for t in tiers %}{{ tally[t] }} {{ t }}{% if not loop.last %}, {% endif %}{% endfor %}">
+    {%- for t in tiers %}{% if tally[t] %}<span class="{{ t }}" style="width: {{ 100 * tally[t] / total }}%"></span>{% endif %}{% endfor -%}
+  </div>
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro legend() -%}
+  <div class="legend" aria-label="Tiers">
+    <span><i style="background: var(--publishable)"></i>publishable: interaction and strict types pass</span>
+    <span><i style="background: var(--working)"></i>working: fixture interaction checks pass</span>
+    <span><i style="background: var(--starts)"></i>starts: loads without errors</span>
+    <span><i style="background: var(--broken)"></i>broken</span>
+  </div>
+{%- endmacro %}
+
+{% macro checks(values, raw=None) -%}
+  <span class="checks">
+    {%- for name, label in [('response', 'reply'), ('syntax', 'syntax'), ('startup', 'start'), ('fixture', 'fixture'), ('type', 'types')] -%}
+    {%- set value = values.get(name, values.get('browser') if name == 'startup' else None) -%}
+    <span class="{{ value }}" title="{{ label }}: {{ value or 'not run' }}">{{ label }}{% if name == 'type' and values.typeErrors is not none and values.typeErrors is defined %} {% if values.typeErrorsRaw is defined and values.typeErrorsRaw != values.typeErrors %}{{ values.typeErrorsRaw }}→{% endif %}{{ values.typeErrors }}{% endif %}</span>
+    {%- endfor -%}
+  </span>
+{%- endmacro %}

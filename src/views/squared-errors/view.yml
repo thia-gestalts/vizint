@@ -5,6 +5,7 @@ title: Squared errors
 intro: Drag the three points up or down. The vertical gap to the truth line
   forms one side of each square. Its area is the squared error for that point.
 type: engagement
+patterns: [svg-plot, drag-handles, keyboard-handles, live-readout, shared-drag-helper]
 learning:
   records:
     - kind: topic

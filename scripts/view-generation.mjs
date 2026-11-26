@@ -6,36 +6,37 @@ import { lstat, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
 import { chromium } from 'playwright-core';
 import ts from 'typescript';
-import { parse, stringify } from 'yaml';
+import { stringify } from 'yaml';
+import { entries } from '../src/catalog.mjs';
+import { fixActivity } from './activity-codemod.mjs';
 import { activityFrame } from './activity-frame.mjs';
 import { activityProgram } from './activity-program.mjs';
+import { readActivityScript } from './activity-script.mjs';
 import { escapeHTML } from './learning-pages.mjs';
 import { fixtures } from './view-generation-fixtures.mjs';
+import { exampleModes, selectExample } from './view-examples.mjs';
 import { activityLibraries, bundleActivity, libraryCatalog, libraryNamesInBrief, libraryReferences, libraryVersion, validateLibraries }
   from './activity-libraries.mjs';
-import { nextRepair, preferredCandidate, repairBudgetMs, repairCallLimit, regressions } from './view-repair-policy.mjs';
+import { accepted, nextRepair, preferredCandidate, regressions, repairBudgetMs, repairCallLimit, repairPolicies, tierOf, tiers }
+  from './view-repair-policy.mjs';
 
 const activityFiles = { markup: 'activity.html', styles: 'activity.css', code: 'activity.js' };
-const fields = ['title', 'intro', ...Object.keys(activityFiles)];
-const schema = {
-  type: 'object',
-  required: fields,
-  properties: Object.fromEntries(fields.map(key => [key, { type: 'string' }])),
-  additionalProperties: false,
+export const formats = ['fenced', 'json'];
+export const checkedIn = 'checked-in';
+export const limits = { arms: 4, samples: 5, hypothesis: 500, brief: 4000, label: 40, origin: 60, temperature: 1.5 };
+export const armDefaults = { examples: 'none', samples: 3, temperature: 0.7, repair: 'none', format: 'fenced' };
+const baseOptions = { num_ctx: 8192, num_predict: 4096 };
+const endpoint = process.env.VIZINT_OLLAMA_URL ?? 'http://localhost:11434';
+const common = await readFile(new URL('../src/frame.css', import.meta.url), 'utf8');
+const runIdPattern = /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.\d{3}Z-[a-f0-9]{8}$/;
+
+const activitySchema = {
+  type: 'object', required: ['title', 'intro', 'markup', 'styles', 'code', 'libraries'], additionalProperties: false,
+  properties: {
+    ...Object.fromEntries(['title', 'intro', 'markup', 'styles', 'code'].map(key => [key, { type: 'string' }])),
+    libraries: { type: 'array', items: { type: 'string', enum: Object.keys(activityLibraries) } },
+  },
 };
-const codeSchema = {
-  type: 'object', required: ['code'], properties: { code: { type: 'string' } },
-  additionalProperties: false,
-};
-const legacyPrompt = `Return one JSON object with these string fields: title, intro, markup, styles, code.
-Create a small accessible educational activity. markup is an HTML fragment,
-styles is plain CSS, and code is plain JavaScript in a classic script.
-Use JSDoc comments for types. TypeScript syntax, including parameter and
-return type annotations, is invalid. Type DOM lookups precisely for strict
-checkJs. Put all interaction in code. The view runs in a sandboxed iframe.
-Use no external assets, libraries or network calls. Keep the code concise.
-Example: const slider = document.querySelector('#threshold');
-if (slider instanceof HTMLInputElement) slider.addEventListener('input', () => Number(slider.value));`;
 const libraryRequestSchema = {
   type: 'object', required: ['libraryRequest'], additionalProperties: false,
   properties: {
@@ -45,28 +46,75 @@ const libraryRequestSchema = {
     },
   },
 };
-const activitySchema = {
-  ...schema, required: [...fields, 'libraries'],
-  properties: {
-    ...schema.properties,
-    libraries: { type: 'array', items: { type: 'string', enum: Object.keys(activityLibraries) } },
-  },
-};
-const prompt = `Create a small accessible educational activity. Return the requested JSON fields.
-markup is an HTML fragment, styles is plain CSS, and code is JavaScript with JSDoc for strict checkJs.
-Connect each control to an observable change. Use SVG, canvas, or HTML as appropriate.
-The activity runs offline in a sandboxed iframe. Use no URLs, external resources, network calls, or package globals.
-Declare the packages you import in the libraries array. Use only static imports from declared supported packages.
-Use an empty libraries array for plain browser JavaScript. TypeScript syntax is invalid.
-When a library reference is supplied, use it and generate the activity.
-Honor explicit library requirements. If a required library is unavailable, report it.
-If a needed library has no supplied reference, you can return
-{"libraryRequest":{"package":"npm package name without version","reason":"why this brief needs it"}}.
-Supported packages:
-${libraryCatalog()}`;
-const options = { temperature: 0, num_ctx: 4096, num_predict: 3000 };
-const endpoint = process.env.VIZINT_OLLAMA_URL ?? 'http://localhost:11434';
-const common = await readFile(new URL('../src/frame.css', import.meta.url), 'utf8');
+const libraryRequestExample = '{"libraryRequest":{"package":"npm package name without version","reason":"why this brief needs it"}}';
+
+export function describe() {
+  return {
+    fixtures: Object.entries(fixtures).map(([name, fixture]) => ({ name, view: fixture.view ?? null, brief: fixture.brief })),
+    exampleModes, repairPolicies, formats, tiers, limits, armDefaults, checkedIn,
+  };
+}
+
+/** Validate and normalize a run spec. Arm ids are assigned by position. */
+export function validateSpec(input) {
+  const fail = message => { throw new Error(`Invalid run spec: ${message}`); };
+  const text = (value, max) => typeof value === 'string' && value.trim() && value.trim().length <= max;
+  if (!input || typeof input !== 'object' || Array.isArray(input)) fail('expected an object');
+  for (const key of Object.keys(input)) {
+    if (!['hypothesis', 'origin', 'fixtures', 'brief', 'arms'].includes(key)) fail(`unknown field ${key}`);
+  }
+  if (!text(input.hypothesis, limits.hypothesis)) fail(`hypothesis must be 1–${limits.hypothesis} characters`);
+  const origin = input.origin ?? { kind: 'human', name: 'cli' };
+  if (!origin || typeof origin !== 'object' || Object.keys(origin).some(key => !['kind', 'name'].includes(key)) ||
+      !['human', 'agent'].includes(origin.kind) || !text(origin.name, limits.origin)) {
+    fail('origin needs kind human or agent and a short name');
+  }
+  const hasBrief = input.brief !== undefined;
+  if (hasBrief === (input.fixtures !== undefined)) fail('give either fixtures or brief');
+  if (hasBrief && !text(input.brief, limits.brief)) fail(`brief must be 1–${limits.brief} characters`);
+  if (!hasBrief && (!Array.isArray(input.fixtures) || !input.fixtures.length ||
+      new Set(input.fixtures).size !== input.fixtures.length ||
+      input.fixtures.some(name => typeof name !== 'string' || !Object.hasOwn(fixtures, name)))) {
+    fail(`fixtures must be unique names from ${Object.keys(fixtures).join(', ')}`);
+  }
+  if (!Array.isArray(input.arms) || !input.arms.length || input.arms.length > limits.arms) {
+    fail(`arms must list 1–${limits.arms} arms`);
+  }
+  const arms = input.arms.map((arm, index) => {
+    const id = String.fromCharCode(65 + index);
+    if (!arm || typeof arm !== 'object' || Array.isArray(arm)) fail(`arm ${id} must be an object`);
+    for (const key of Object.keys(arm)) {
+      if (!['id', 'label', 'model', ...Object.keys(armDefaults)].includes(key)) fail(`arm ${id} has unknown field ${key}`);
+    }
+    const value = { ...armDefaults, ...arm, id };
+    if (!text(value.model, 100) || value.model.startsWith('-')) fail(`arm ${id} needs a model name`);
+    if (!exampleModes.includes(value.examples)) fail(`arm ${id} examples must be ${exampleModes.join(', ')}`);
+    if (!repairPolicies.includes(value.repair)) fail(`arm ${id} repair must be ${repairPolicies.join(', ')}`);
+    if (!formats.includes(value.format)) fail(`arm ${id} format must be ${formats.join(', ')}`);
+    if (!Number.isInteger(value.samples) || value.samples < 1 || value.samples > limits.samples) {
+      fail(`arm ${id} samples must be 1–${limits.samples}`);
+    }
+    if (typeof value.temperature !== 'number' || !(value.temperature >= 0 && value.temperature <= limits.temperature)) {
+      fail(`arm ${id} temperature must be 0–${limits.temperature}`);
+    }
+    if (value.label !== undefined && (typeof value.label !== 'string' || value.label.length > limits.label)) {
+      fail(`arm ${id} label must be at most ${limits.label} characters`);
+    }
+    if (value.model === checkedIn) {
+      if (hasBrief) fail('checked-in arms need fixtures');
+      Object.assign(value, { samples: 1, examples: 'none', repair: 'none' });
+    }
+    value.model = value.model.trim();
+    value.label = value.label?.trim() || (value.model === checkedIn ? 'Checked-in view'
+      : [value.model, `${value.examples} examples`, value.repair !== 'none' && `repair ${value.repair}`,
+        value.format !== 'fenced' && value.format].filter(Boolean).join(' · '));
+    return value;
+  });
+  return {
+    hypothesis: input.hypothesis.trim(), origin: { kind: origin.kind, name: origin.name.trim() },
+    ...(hasBrief ? { brief: input.brief.trim() } : { fixtures: [...input.fixtures] }), arms,
+  };
+}
 
 function git(args) {
   try {
@@ -88,69 +136,74 @@ async function ollama(path, body, timeout = 300_000) {
   return response.json();
 }
 
-async function generate(model, brief, folder, retry, result, deadline, language) {
-  const legacy = ['repair-code', 'retry-truncated'].includes(retry?.kind);
-  const codeOnly = ['repair-code', 'repair-js'].includes(retry?.kind);
-  const named = [...new Set([
-    ...libraryNamesInBrief(brief),
-    ...(retry?.draft?.libraries ?? []),
+function systemPrompt({ format, allowLibraries, reference, example }) {
+  const libraries = allowLibraries ? [
+    'Declare imported packages in libraries. Use only static imports from declared supported packages.',
+    'Use an empty libraries list for plain browser JavaScript. When a library reference is supplied, use it.',
+    'Supported packages:', libraryCatalog(),
+  ] : ['Use plain browser JavaScript without imports. libraries is an empty list.'];
+  const reply = format === 'fenced' ? [
+    'Reply with exactly four fenced code blocks in this order and nothing else:',
+    '```json\n{"title": "Short title", "intro": "One sentence for the learner.", "libraries": []}\n```',
+    '```html\n<!-- the activity markup fragment -->\n```', '```css\n/* the activity styles */\n```',
+    '```js\n// the activity script\n```',
+    ...(allowLibraries ? [`If a needed library has no supplied reference, reply with only a json block:\n${libraryRequestExample}`] : []),
+  ] : [
+    'Return one JSON object with string fields title, intro, markup, styles and code, and a libraries array.',
+    ...(allowLibraries ? [`If a needed library has no supplied reference, you can return ${libraryRequestExample}`] : []),
+  ];
+  return [
+    [
+      'Create a small accessible educational activity that runs offline in a sandboxed iframe.',
+      'Write an HTML fragment, plain CSS, and browser JavaScript. Connect each control to an observable change.',
+      'Keep it compact: one focused visual, the essential controls, short CSS, and no explanatory prose blocks.',
+      'Use SVG, canvas, or HTML as appropriate. Use no URLs, external resources, network calls, or package globals.',
+      'Write plain JavaScript checked with strict checkJs. Use JSDoc comments for types; TypeScript syntax is invalid.',
+      ...libraries,
+    ].join('\n'),
+    reply.join('\n'), reference, example,
+  ].filter(Boolean).join('\n\n');
+}
+
+function renderDraft(draft, format) {
+  if (format === 'json') return JSON.stringify(draft);
+  const header = JSON.stringify({ title: draft.title, intro: draft.intro, libraries: draft.libraries ?? [] });
+  return [['json', header], ['html', draft.markup], ['css', draft.styles], ['js', draft.code]]
+    .map(([language, body]) => `\`\`\`${language}\n${body}\n\`\`\``).join('\n');
+}
+
+async function generate({ model, brief, folder, retry, result, deadline, format, temperature, seed, example, allowLibraries }) {
+  const named = allowLibraries ? [...new Set([
+    ...libraryNamesInBrief(brief), ...(retry?.draft?.libraries ?? []),
     ...Object.keys(activityLibraries).filter(name => name === retry?.requestedLibrary),
-  ])];
-  const reference = legacy ? '' : await libraryReferences(named);
-  const languagePrompt = language === 'typescript'
-    ? prompt.replace('JavaScript with JSDoc for strict checkJs', 'TypeScript with native type annotations')
-      .replace('TypeScript syntax is invalid.', 'Use strict TypeScript.')
-    : prompt;
-  const system = retry?.kind === 'repair-code'
-    ? 'Repair a classic JavaScript activity. Use JSDoc for typing and preserve the teaching behavior. Return JSON with only a code field.'
-    : legacy ? legacyPrompt : [languagePrompt, reference].filter(Boolean).join('\n\n');
+  ])] : [];
+  const reference = await libraryReferences(named);
+  const system = systemPrompt({ format, allowLibraries, reference, example: example?.text });
   const messages = [{ role: 'system', content: system }, { role: 'user', content: brief }];
   if (retry?.kind === 'generate-with-library') {
     messages.push({ role: 'user', content: `The requested package "${retry.requestedLibrary}" is available.
-Use the supplied reference and generate the complete activity. Include the package in libraries.` });
+Use the supplied reference and write the complete activity. Include the package in libraries.` });
   }
-  if (retry?.kind === 'repair-code') messages.push(
-    { role: 'user', content: `Repair the JavaScript below. Return only a JSON object with the field "code".
-Keep the existing HTML, CSS, and element IDs. For example:
-const slider = document.querySelector('#threshold');
-if (!(slider instanceof HTMLInputElement)) throw new Error('Missing threshold input');
-For canvas, also check the result of getContext('2d'). Never use TypeScript casts.
-
-HTML:\n${retry.draft.markup}\n
-JavaScript:\n${retry.draft.code}\n
-Diagnostics:\n${retry.error.slice(0, 3000)}` },
-  );
-  if (retry?.kind === 'retry-truncated') messages.push({
-    role: 'user', content: 'Keep the complete activity compact. Focus on one plot and the essential controls.',
-  });
-  if (retry && ['repair-js', 'repair-activity', 'regenerate'].includes(retry.kind)) {
-    const instruction = retry.kind === 'regenerate'
-      ? 'Write a fresh compact activity focused on the essential interaction.'
-      : codeOnly ? 'Return only the corrected code field. Keep the existing markup and styles.'
-        : 'Return the complete corrected activity. Change only what the failure requires.';
-    const diagnostics = retry.diagnostics.slice(0, 8).map(item => ({
-      ...item, message: item.message.slice(0, 550),
-    }));
-    const draft = retry.kind === 'regenerate' ? null : codeOnly
-      ? { markup: retry.draft.markup, code: retry.draft.code } : retry.draft;
+  if (retry?.kind === 'regenerate') {
+    messages.push({ role: 'user', content: 'Write a fresh, compact activity focused on the essential interaction.' });
+  }
+  if (retry?.kind === 'repair') {
+    const diagnostics = retry.diagnostics.slice(0, 8).map(item => ({ ...item, message: item.message.slice(0, 550) }));
     messages.push({ role: 'user', content: [
-      instruction,
-      'Fix the first reported failure and preserve working behavior. Use the offline runtime contract above.',
-      JSON.stringify(diagnostics),
-      draft ? JSON.stringify(draft) : '',
-    ].filter(Boolean).join('\n') });
+      'The draft below failed these checks. Return the complete corrected activity in the same reply format.',
+      'Fix the first reported failure and preserve working behavior.',
+      JSON.stringify(diagnostics), renderDraft(retry.draft, format),
+    ].join('\n') });
   }
-  const draftFormat = codeOnly ? codeSchema : legacy ? schema : activitySchema;
-  const allowLibraryRequest = !legacy && retry?.kind !== 'generate-with-library';
+  const allowRequest = allowLibraries && retry?.kind !== 'generate-with-library';
   const request = {
-    model, messages,
-    format: allowLibraryRequest ? { anyOf: [draftFormat, libraryRequestSchema] } : draftFormat,
-    stream: false, think: retry?.think ?? false,
-    options: retry ? { ...options, num_ctx: 8192, num_predict: 4500 } : options,
+    model, messages, stream: false, think: retry?.think ?? false,
+    options: { ...baseOptions, temperature, seed },
+    ...(format === 'json' && { format: allowRequest ? { anyOf: [activitySchema, libraryRequestSchema] } : activitySchema }),
   };
   result.options = request.options;
-  await writeFile(join(folder, 'request.json'), JSON.stringify(request, null, 2));
   result.think = request.think;
+  await writeFile(join(folder, 'request.json'), JSON.stringify(request, null, 2));
   const response = await ollama('/api/chat', request, remaining(deadline)).catch(error => {
     if (Number.isFinite(deadline) && error.name === 'TimeoutError') {
       throw Object.assign(new Error('Repair time budget expired'), { code: 'REPAIR_DEADLINE' });
@@ -158,17 +211,40 @@ Diagnostics:\n${retry.error.slice(0, 3000)}` },
     throw error;
   });
   await writeFile(join(folder, 'response.json'), JSON.stringify(response, null, 2));
-  return response;
+  return { response, allowRequest };
 }
 
-function parseDraft(draft, expected = fields) {
-  const allowed = expected === fields ? [...expected, 'libraries'] : expected;
-  if (!draft || typeof draft !== 'object' || Object.keys(draft).some(key => !allowed.includes(key)) ||
-      !expected.every(key => typeof draft[key] === 'string' && draft[key].trim())) {
-    throw new Error('Expected nonempty strings for ' + expected.join(', '));
+/** Parse a fenced reply: a json header block, then html, css and js blocks. */
+export function parseFenced(content) {
+  const blocks = [...String(content).matchAll(/^```[ \t]*([\w+-]*)[^\n]*\n([\s\S]*?)^```[ \t]*$/gm)]
+    .map(([, language, body]) => ({ language: language.toLowerCase(), body: body.replace(/\n$/, '') }));
+  if (!blocks.length) throw new Error('Expected fenced code blocks');
+  const header = blocks.find(block => block.language === 'json');
+  let meta = {};
+  if (header) {
+    try {
+      meta = JSON.parse(header.body);
+    } catch {
+      throw new Error('The json header block is not valid JSON');
+    }
   }
-  if (expected === fields && Object.hasOwn(draft, 'libraries')) validateLibraries(draft.libraries);
-  return draft;
+  if (meta && typeof meta === 'object' && Object.hasOwn(meta, 'libraryRequest')) return meta;
+  const body = (...names) => blocks.find(block => names.includes(block.language))?.body;
+  return {
+    title: meta?.title, intro: meta?.intro, libraries: meta?.libraries ?? [],
+    markup: body('html'), styles: body('css') ?? '', code: body('js', 'javascript', 'mjs'),
+  };
+}
+
+function parseDraft(draft) {
+  const required = ['title', 'intro', 'markup', 'code'];
+  if (!draft || typeof draft !== 'object' || !required.every(key => typeof draft[key] === 'string' && draft[key].trim()) ||
+      typeof (draft.styles ?? '') !== 'string') {
+    throw new Error('Expected a nonempty title, intro, html and js');
+  }
+  const libraries = draft.libraries ?? [];
+  validateLibraries(libraries);
+  return { title: draft.title, intro: draft.intro, markup: draft.markup, styles: draft.styles ?? '', code: draft.code, libraries };
 }
 
 function parseLibraryRequest(value) {
@@ -185,9 +261,9 @@ function parseLibraryRequest(value) {
     ...(version && { requestedVersion: version }), ...(installed && { installedVersion: installed }) };
 }
 
-async function writeDraft(folder, draft, language) {
+async function writeDraft(folder, draft) {
   await Promise.all([
-    ...Object.entries(activityFiles).map(([key, file]) => writeFile(join(folder, key === 'code' && language === 'typescript' ? 'activity.ts' : file), draft[key])),
+    ...Object.entries(activityFiles).map(([key, file]) => writeFile(join(folder, file), draft[key])),
     writeFile(join(folder, 'view.yml'), stringify({
       title: draft.title, intro: draft.intro, type: 'engagement', frameHeight: '32rem',
       ...(draft.libraries?.length && { libraries: draft.libraries }),
@@ -248,23 +324,28 @@ async function checkBrowser(draft, folder, browser, fixture, checks, diagnostics
   }
 }
 
-async function checkDraft(draft, folder, browser, fixture, checks, diagnostics, deadline, language) {
-  const filename = join(folder, language === 'typescript' ? 'activity.ts' : 'activity.js');
-  const types = ts.getPreEmitDiagnostics(activityProgram(filename, draft.code, draft.libraries))
+async function checkDraft(draft, folder, browser, fixture, result, deadline) {
+  const { checks, diagnostics } = result;
+  const filename = join(folder, 'activity.js');
+  const libraries = draft.libraries ?? [];
+  const fixed = fixActivity({ markup: draft.markup, code: draft.code, libraries }, filename);
+  checks.typeErrorsRaw = fixed.before;
+  result.codemod = fixed.fixes;
+  if (fixed.code !== draft.code) {
+    await writeFile(join(folder, 'activity.raw.js'), draft.code);
+    await writeFile(filename, fixed.code);
+    draft.code = fixed.code;
+  }
+  const types = ts.getPreEmitDiagnostics(activityProgram(filename, draft.code, libraries))
     .filter(item => item.category === ts.DiagnosticCategory.Error);
   checks.typeErrors = types.length;
   checks.type = types.length ? 'fail' : 'pass';
   checks.typeCodes = [...new Set(types.map(item => item.code))].sort((a, b) => a - b);
-  const format = {
-    getCanonicalFileName: file => file,
-    getCurrentDirectory: () => folder,
-    getNewLine: () => '\n',
-  };
+  const format = { getCanonicalFileName: file => file, getCurrentDirectory: () => folder, getNewLine: () => '\n' };
   let code = draft.code;
-  if (language || draft.libraries?.length) {
+  if (libraries.length) {
     try {
-      code = await bundleActivity({ filename, source: code, libraries: draft.libraries ?? [] });
-      if (language) await writeFile(join(folder, 'activity.bundle.js'), code);
+      code = await bundleActivity({ filename, source: code, libraries });
       checks.bundle = 'pass';
     } catch (error) {
       checks.bundle = 'fail';
@@ -277,7 +358,7 @@ async function checkDraft(draft, folder, browser, fixture, checks, diagnostics, 
   } catch (error) {
     checks.syntax = 'fail';
     const location = error.stack.split('\n').slice(0, 3).join('\n');
-    if (!draft.libraries?.length && /Cannot use import statement outside a module/i.test(error.message)) {
+    if (!libraries.length && /Cannot use import statement outside a module/i.test(error.message)) {
       diagnostics.push({ stage: 'bundle', message: 'Static imports require declaring the imported package in libraries.', location });
     } else {
       diagnostics.push({ stage: 'syntax', message: error.message, location });
@@ -287,58 +368,52 @@ async function checkDraft(draft, folder, browser, fixture, checks, diagnostics, 
     await checkBrowser({ ...draft, code }, folder, browser, fixture, checks, diagnostics, deadline);
     checks.browser = checks.startup === 'pass' && checks.fixture !== 'fail' ? 'pass' : 'fail';
   }
-  for (const code of checks.typeCodes) {
-    const group = types.filter(item => item.code === code);
+  for (const typeCode of checks.typeCodes) {
+    const group = types.filter(item => item.code === typeCode);
     diagnostics.push({
-      stage: 'type', code, count: group.length,
+      stage: 'type', code: typeCode, count: group.length,
       message: ts.formatDiagnostics(group.slice(0, 2), format).trim(),
     });
   }
-  // The baseline policy still receives the original diagnostic ordering and scope.
   return [
-    ts.formatDiagnostics(types, format).trim(),
     ...diagnostics.filter(item => item.stage !== 'type').map(item => item.message),
+    ts.formatDiagnostics(types, format).trim(),
   ].filter(Boolean).join('\n');
 }
 
-async function readReference() {
-  const folder = new URL('../src/views/bezier/', import.meta.url);
-  const draft = { title: 'Bézier explorer', intro: 'Explore repeated interpolation.' };
-  for (const [key, file] of Object.entries(activityFiles)) {
-    draft[key] = await readFile(new URL(file, folder), 'utf8');
-  }
-  return draft;
+async function readView(slug) {
+  const entry = entries.find(item => item.slug === slug);
+  if (!entry) throw new Error(`Unknown checked-in view ${slug}`);
+  const folder = new URL(`../src/views/${slug}/`, import.meta.url);
+  const read = file => readFile(new URL(file, folder), 'utf8');
+  return {
+    title: entry.title, intro: entry.intro, markup: await read('activity.html'), styles: await read('activity.css'),
+    code: (await readActivityScript(entry)).source, libraries: entry.libraries ?? [],
+  };
 }
 
-async function attempt({ folder, model, brief, fixture, browser, reference, seed, retry,
-  modelDigest, language, deadline = Infinity }) {
+async function attempt({ folder, model, brief, fixture, browser, reference, retry, modelDigest, deadline = Infinity,
+  format, temperature, seed, example, allowLibraries }) {
   await mkdir(folder);
   const result = {
     passed: false,
-    strategy: seed ? 'replay-source' : reference ? 'control' : retry?.kind ?? 'generate',
+    strategy: reference ? 'control' : retry?.kind ?? 'generate',
     diagnostics: [],
     checks: { response: 'skipped', type: 'skipped', syntax: 'skipped', browser: 'skipped',
       startup: 'skipped', bundle: 'skipped', fixture: fixture ? 'skipped' : 'unverified' },
+    ...(example && { example: { mode: example.mode, slug: example.slug, retrieval: example.retrieval,
+      truncated: example.truncated, skipped: example.skipped } }),
   };
   const started = performance.now();
-  let draft = reference ?? seed?.draft;
+  let draft = reference && { ...reference };
   let stage = 'request';
   try {
-    if (seed?.libraryRequest) {
-      stage = 'library-request';
-      result.libraryRequest = seed.libraryRequest;
-      result.checks.response = 'pass';
-      throw new Error(`Saved model requested ${seed.libraryRequest.package}: ${seed.libraryRequest.reason}`);
-    }
-    if (seed && !draft) {
-      stage = 'truncated';
-      result.checks.response = 'fail';
-      throw new Error('Saved generation hit the output token limit');
-    }
     if (!draft) {
       result.requestedModel = model;
       if (modelDigest) result.model = { digest: modelDigest };
-      const response = await generate(model, brief, folder, retry, result, deadline, language);
+      const { response, allowRequest } = await generate({
+        model, brief, folder, retry, result, deadline, format, temperature, seed, example, allowLibraries,
+      });
       result.generationSeconds = response.total_duration / 1e9;
       result.loadSeconds = response.load_duration / 1e9;
       result.outputTokens = response.eval_count;
@@ -354,8 +429,10 @@ async function attempt({ folder, model, brief, fixture, browser, reference, seed
         throw new Error('Generation hit the output token limit');
       }
       stage = 'response';
-      const output = JSON.parse(response.message?.content);
+      const content = response.message?.content ?? '';
+      const output = format === 'json' ? JSON.parse(content) : parseFenced(content);
       if (output && Object.hasOwn(output, 'libraryRequest')) {
+        if (!allowRequest) throw new Error('Library requests are not available for this brief');
         result.libraryRequest = parseLibraryRequest(output);
         result.checks.response = 'pass';
         stage = 'library-request';
@@ -363,36 +440,30 @@ async function attempt({ folder, model, brief, fixture, browser, reference, seed
         const spec = requestedVersion ? `${name}@${requestedVersion}` : name;
         throw new Error(`Model requested ${spec} (${available ? 'available' : 'unavailable'}): ${reason}`);
       }
-      draft = ['repair-code', 'repair-js'].includes(retry?.kind)
-        ? { ...retry.draft, ...parseDraft(output, ['code']) }
-        : parseDraft(output);
-      result.checks.response = 'pass';
-    } else if (seed) {
+      draft = parseDraft(output);
+      if (!allowLibraries && draft.libraries.length) throw new Error('This brief allows no libraries');
       result.checks.response = 'pass';
     }
     result.libraries = draft.libraries ?? [];
     stage = 'artifacts';
-    await writeDraft(folder, draft, language);
+    await writeDraft(folder, draft);
     stage = 'validation';
-    const error = await checkDraft(draft, folder, browser, fixture, result.checks, result.diagnostics, deadline, language);
+    const error = await checkDraft(draft, folder, browser, fixture, result, deadline);
     remaining(deadline);
     if (error) {
       result.failure = stage;
       result.error = error;
-    } else {
-      result.passed = true;
     }
+    result.passed = !error && accepted(result.checks);
   } catch (error) {
     result.failure = error.code === 'REPAIR_DEADLINE' || performance.now() >= deadline - 1 ? 'deadline'
       : stage === 'validation' ? 'infrastructure' : stage;
     result.error = error.cause ? `${error.message}: ${error.cause.message}` : error.message;
     result.diagnostics.push({ stage: result.failure, message: result.error });
     if (['response', 'truncated'].includes(stage)) result.checks.response = 'fail';
-  }
-  if (language && (result.failure === 'deadline' || performance.now() >= deadline)) {
-    result.failure = 'deadline';
     result.passed = false;
   }
+  result.tier = tierOf(result.checks);
   result.seconds = (performance.now() - started) / 1000;
   await writeFile(join(folder, 'result.json'), JSON.stringify(result, null, 2));
   return { result, draft };
@@ -408,102 +479,28 @@ function installedDigest(tags, model) {
   return tags.find(item => item.name === model || item.name === model + ':latest')?.digest;
 }
 
-async function readReplay(ids, tags) {
-  const pairs = [];
-  const skipped = [];
-  for (const id of new Set(ids)) {
-    if (!/^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.\d{3}Z-[a-f0-9]{8}$/.test(id)) {
-      throw new Error(`Invalid run ID: ${id}`);
-    }
-    const folder = resolve('.view-generation', id);
-    const skip = (reason, attempt) => skipped.push({ runId: id, attempt, reason });
-    try {
-      if (!(await lstat(folder)).isDirectory()) throw new Error('Expected a run directory');
-      const settings = JSON.parse(await readFile(join(folder, 'run.json'), 'utf8'));
-      const rows = JSON.parse(await readFile(join(folder, 'results.json'), 'utf8'));
-      if (!rows.length) skip('No recorded cases');
-      for (const row of rows) {
-        const first = row.attempts[0];
-        const path = first?.path;
-        if (row.model === 'Checked-in view' || first?.strategy === 'control') {
-          skip('Checked-in control', path);
-          continue;
-        }
-        if (!/^case-[1-9]\d*-attempt-1$/.test(path ?? '')) {
-          skip('Missing first attempt', path);
-          continue;
-        }
-        if (first.passed) {
-          skip('First attempt already passed', path);
-          continue;
-        }
-        try {
-          if (!(await lstat(join(folder, path))).isDirectory()) throw new Error('Expected an attempt directory');
-          const read = async name => {
-            const file = join(folder, path, name);
-            if (!(await lstat(file)).isFile()) throw new Error(`Expected a regular ${name} artifact`);
-            return readFile(file, 'utf8');
-          };
-          const request = JSON.parse(await read('request.json'));
-          const planned = settings.cases?.find(item => item.model === row.model && item.fixture === row.name);
-          const brief = request.messages?.find(message => message.role === 'user')?.content ?? planned?.brief;
-          if (request.model !== row.model) throw new Error('Saved request model differs from the case model');
-          if (typeof brief !== 'string' || !brief.trim()) throw new Error('Missing original brief');
-          if (row.name !== 'custom' && fixtures[row.name]?.brief !== brief) {
-            throw new Error('Saved brief does not match the current fixture');
-          }
-          const digest = installedDigest(tags, row.model);
-          if (!digest) throw new Error(`Model is not installed: ${row.model}`);
-          if (first.model?.digest && first.model.digest !== digest) throw new Error('Installed model digest differs');
-          const response = JSON.parse(await read('response.json'));
-          const seed = {};
-          if (first.failure === 'library-request') {
-            seed.libraryRequest = parseLibraryRequest(JSON.parse(response.message.content));
-          } else if (response.done_reason !== 'length' && first.failure !== 'truncated') {
-            const { title, intro, libraries } = parse(await read('view.yml'));
-            const draft = { title, intro, ...(libraries !== undefined && { libraries }) };
-            for (const [key, file] of Object.entries(activityFiles)) draft[key] = await read(file);
-            seed.draft = parseDraft(draft);
-          }
-          pairs.push({
-            pairId: String(pairs.length + 1), model: row.model, name: row.name, brief,
-            source: { runId: id, attempt: path, digest: first.model?.digest ?? null },
-            seed, order: randomInt(2) ? ['once', 'loop'] : ['loop', 'once'],
-          });
-        } catch (error) {
-          skip(error.message, path);
-        }
-      }
-    } catch (error) {
-      skip(error.message);
-    }
-  }
-  return { pairs, skipped };
-}
-
-async function runCase({ entry, row, folder, browser, tags, rows, escalationModel, shared }) {
-  const fixture = fixtures[entry.name];
+async function runSample({ arm, target, row, folder, browser, tags, rows, example }) {
   const index = rows.indexOf(row) + 1;
-  async function record({ retry, deadline, model = entry.model } = {}) {
+  async function record({ retry, deadline } = {}) {
     const path = `case-${index}-attempt-${row.attempts.length + 1}`;
     const attemptFolder = join(folder, path);
-    console.log(`${model} / ${entry.name} / ${row.policy} / attempt ${row.attempts.length + 1}`);
+    console.log(`${arm.id} ${arm.label} / ${target.name} / sample ${row.sample} / attempt ${row.attempts.length + 1}`);
     const value = await attempt({
-      brief: entry.brief, reference: entry.reference,
-      browser, fixture, folder: attemptFolder, retry, deadline, model,
-      modelDigest: installedDigest(tags, model),
+      brief: target.brief, fixture: target.fixture, reference: target.reference, browser, folder: attemptFolder,
+      retry, deadline, model: arm.model, modelDigest: installedDigest(tags, arm.model), format: arm.format,
+      temperature: arm.temperature, seed: row.sample * 1000 + row.attempts.length, example,
+      allowLibraries: !target.fixture,
     });
     const exists = file => lstat(join(attemptFolder, file)).then(() => true, () => false);
     row.attempts.push({
       ...value.result, path, preview: await exists('preview.png'), draft: await exists('view.yml'),
       request: await exists('request.json'), response: await exists('response.json'),
     });
-    if (value.result.error) console.log(value.result.error);
+    if (value.result.error) console.log(value.result.error.split('\n').slice(0, 4).join('\n'));
     return value;
   }
 
-  let latest = shared ?? await record();
-  if (shared) row.attempts.push({ ...shared.result, path: shared.path });
+  let latest = await record();
   let best = latest;
   row.selectedAttempt = latest.draft ? row.attempts.at(-1).path : null;
   await saveResults(folder, rows);
@@ -513,167 +510,164 @@ async function runCase({ entry, row, folder, browser, tags, rows, escalationMode
   let escalated = false;
   let retry;
   let previous;
-  while (calls < repairCallLimit && performance.now() < deadline &&
-    (retry = nextRepair(row.policy, best.result, latest.result, calls, escalated, previous))) {
+  while (!target.reference && calls < repairCallLimit && performance.now() < deadline &&
+    (retry = nextRepair(arm.repair, best.result, latest.result, calls, escalated, previous))) {
     if (retry.think) escalated = true;
-    const model = retry.think && escalationModel ? escalationModel : entry.model;
     previous = latest.result;
     latest = await record({
-      retry: { ...retry, ...best, diagnostics: best.result.diagnostics, error: best.result.error,
-        requestedLibrary: latest.result.libraryRequest?.package },
-      deadline, model,
+      retry: { ...retry, ...best, diagnostics: best.result.diagnostics, requestedLibrary: latest.result.libraryRequest?.package },
+      deadline,
     });
     calls++;
-    const lostChecks = latest.draft ? regressions(best.result, latest.result) : [];
-    row.attempts.at(-1).regressions = lostChecks;
-    latest.result.elapsedSeconds = row.attempts.at(-1).elapsedSeconds = (performance.now() - started) / 1000;
+    row.attempts.at(-1).regressions = latest.draft ? regressions(best.result, latest.result) : [];
+    row.attempts.at(-1).elapsedSeconds = (performance.now() - started) / 1000;
     if (latest.draft && latest.result.failure !== 'deadline' && preferredCandidate(best.result, latest.result)) {
       best = latest;
       row.selectedAttempt = row.attempts.at(-1).path;
     }
     await saveResults(folder, rows);
   }
-  row.elapsedSeconds = (performance.now() - started) / 1000;
+  row.elapsedSeconds = row.attempts.reduce((total, item) => total + (item.seconds ?? 0), 0);
   row.passed = best.result.passed;
+  row.tier = best.draft ? tierOf(best.result.checks) : 'broken';
+  row.typeErrors = best.result.checks.typeErrors;
+  row.typeErrorsRaw = best.result.checks.typeErrorsRaw;
   row.stopReason = row.passed ? 'passed'
     : latest.result.libraryRequest ? latest.result.libraryRequest.available ? 'library-request' : 'unsupported-dependency'
-    : latest.result.failure === 'deadline' || performance.now() >= deadline ? 'deadline'
-      : ['request', 'artifacts', 'infrastructure'].includes(latest.result.failure) ? 'infrastructure-error'
-        : calls >= repairCallLimit ? 'call-limit'
-          : escalated ? 'stalled-after-escalation' : 'no-further-repair';
+      : latest.result.failure === 'deadline' || performance.now() >= deadline ? 'deadline'
+        : ['request', 'artifacts', 'infrastructure'].includes(latest.result.failure) ? 'infrastructure-error'
+          : calls >= repairCallLimit ? 'call-limit'
+            : escalated ? 'stalled-after-escalation' : 'no-further-repair';
   row.finished = true;
   await saveResults(folder, rows);
 }
 
-const runIdPattern = /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.\d{3}Z-[a-f0-9]{8}$/;
-
-async function runLanguageComparison({ entry, folder, browser, rows, digest }) {
-  for (const [index, language] of entry.order.entries()) {
-    const row = { model: entry.model, name: entry.name, pairId: entry.pairId,
-      order: index + 1, language, attempts: [], finished: false };
-    rows.push(row);
-    await saveResults(folder, rows);
-    const path = `case-${rows.length}-attempt-1`;
-    console.log(`${entry.model} / ${entry.name} / ${language}`);
-    const { result, draft } = await attempt({
-      ...entry, browser, fixture: fixtures[entry.name], folder: join(folder, path),
-      language, modelDigest: digest, deadline: performance.now() + repairBudgetMs,
-    });
-    if (result.model?.digest && result.model.digest !== digest) {
-      result.failure = 'infrastructure';
-      result.error = 'Loaded model digest changed during the comparison';
-      result.passed = false;
-    }
-    const infrastructure = ['request', 'artifacts', 'infrastructure'].includes(result.failure);
-    row.attempts.push({ ...result, path });
-    row.selectedAttempt = draft ? path : null;
-    row.elapsedSeconds = result.seconds;
-    row.working = !infrastructure && result.failure !== 'deadline' && result.checks.fixture === 'pass';
-    row.passed = result.passed;
-    row.stopReason = infrastructure ? 'infrastructure-error' : result.failure ?? 'passed';
-    row.finished = true;
-    if (result.error) console.log(result.error);
-    await saveResults(folder, rows);
+function shuffled(values) {
+  const copy = [...values];
+  for (let index = copy.length - 1; index > 0; index--) {
+    const other = randomInt(index + 1);
+    [copy[index], copy[other]] = [copy[other], copy[index]];
   }
+  return copy;
 }
 
+const usage = `Usage:
+  node scripts/view-generation.mjs run --spec FILE
+  node scripts/view-generation.mjs eval [--model NAME]... [--fixture NAME]... [ARM OPTIONS]
+  node scripts/view-generation.mjs generate "PROMPT" | --brief FILE [--model NAME] [ARM OPTIONS]
+  node scripts/view-generation.mjs describe
+Arm options: --examples ${exampleModes.join('|')} --samples 1-${limits.samples} --temperature 0-${limits.temperature}
+             --repair ${repairPolicies.join('|')} --format ${formats.join('|')}
+Add --hypothesis TEXT to label a run. Fixtures: ${Object.keys(fixtures).join(', ')}.`;
+
 async function main() {
+  const string = { type: 'string' };
   const { values, positionals } = parseArgs({
     allowPositionals: true,
-    allowNegative: true,
     options: {
-      model: { type: 'string', multiple: true }, fixture: { type: 'string' },
-      brief: { type: 'string' }, control: { type: 'boolean' }, repair: { type: 'boolean' },
-      'repair-policy': { type: 'string' }, 'escalation-model': { type: 'string' }, help: { type: 'boolean' },
+      spec: string, model: { type: 'string', multiple: true }, fixture: { type: 'string', multiple: true },
+      brief: string, examples: string, samples: string, temperature: string, repair: string, format: string,
+      hypothesis: string, help: { type: 'boolean' },
     },
   });
   const [command, ...args] = positionals;
   if (command === 'describe') {
-    console.log(JSON.stringify({ fixtures: Object.keys(fixtures) }));
+    console.log(JSON.stringify(describe()));
     return;
   }
-  if (values.help) {
-    console.log(`Usage: node scripts/view-generation.mjs eval [--model NAME] [--fixture ${Object.keys(fixtures).join('|')}] [--control]
-       mise run gen -- "PROMPT" [--model NAME]
-       mise run gen -- --brief FILE
-       node scripts/view-generation.mjs replay RUN_ID...
-       node scripts/view-generation.mjs compare [--model NAME] [--fixture NAME]
-Generation and eval accept --repair-policy none|once|loop. --repair and --no-repair are aliases for once and none.
-The loop and replay accept --escalation-model NAME.`);
+  if (command === 'validate') {
+    // Reads a spec on stdin and prints the normalized spec, for the evaluation dashboard.
+    let text = '';
+    for await (const chunk of process.stdin) text += chunk;
+    try {
+      console.log(JSON.stringify(validateSpec(JSON.parse(text))));
+    } catch (error) {
+      console.log(JSON.stringify({ error: error instanceof SyntaxError ? 'Invalid run spec: expected JSON' : error.message }));
+      process.exitCode = 2;
+    }
+    return;
+  }
+  if (values.help || !['run', 'eval', 'generate'].includes(command)) {
+    console.log(usage);
+    if (!values.help) process.exitCode = 1;
     return;
   }
   const generating = command === 'generate';
-  const replay = command === 'replay';
-  const comparing = command === 'compare';
-  const inline = args.join(' ').trim();
-  const policy = values['repair-policy'] ?? (values.repair === undefined
-    ? (generating ? 'loop' : 'none') : values.repair ? 'once' : 'none');
-  const escalationModel = values['escalation-model'];
-  if (!['none', 'once', 'loop'].includes(policy) ||
-      (values['repair-policy'] !== undefined && values.repair !== undefined) ||
-      (!replay && escalationModel !== undefined && (policy !== 'loop' || !escalationModel.trim())) ||
-      (replay && (!args.length || values.model || values.fixture || values.control || values.brief ||
-        values['repair-policy'] !== undefined || values.repair !== undefined || escalationModel?.trim() === '')) ||
-      (!generating && !replay && ((!comparing && command !== 'eval') || args.length)) ||
-      (comparing && (values.control || values.model?.length > 1 || values.repair !== undefined || values['repair-policy'] !== undefined)) ||
-      (generating && (Boolean(inline) === Boolean(values.brief) || values.fixture || values.control)) ||
-      (!generating && values.brief) || (values.fixture && !Object.hasOwn(fixtures, values.fixture))) {
-    throw new Error('Invalid arguments. Use --help for usage.');
+  let input;
+  if (command === 'run') {
+    if (!values.spec || args.length) throw new Error('Use run --spec FILE. Use --help for usage.');
+    input = JSON.parse(await readFile(values.spec, 'utf8'));
+  } else {
+    const inline = args.join(' ').trim();
+    if (generating ? Boolean(inline) === Boolean(values.brief) || values.fixture : args.length || values.brief) {
+      throw new Error('Invalid arguments. Use --help for usage.');
+    }
+    const number = value => value === undefined ? undefined : Number(value);
+    const arm = model => Object.fromEntries(Object.entries({
+      model, examples: values.examples ?? (generating ? 'retrieved' : undefined), samples: number(values.samples),
+      temperature: number(values.temperature), repair: values.repair, format: values.format,
+    }).filter(([, value]) => value !== undefined));
+    input = {
+      hypothesis: values.hypothesis ?? (generating ? 'Generate a draft for a custom brief' : 'Fixture evaluation'),
+      origin: { kind: 'human', name: 'cli' },
+      ...(generating ? { brief: values.brief ? await readFile(values.brief, 'utf8') : inline }
+        : { fixtures: values.fixture ?? Object.keys(fixtures) }),
+      arms: (values.model ?? ['qwen3.5:4b']).map(arm),
+    };
   }
-  const models = values.model ?? (generating || comparing ? ['qwen3.5:4b'] : ['qwen3.5:4b', 'qwen3.5:9b']);
-  const names = values.fixture ? [values.fixture] : Object.keys(fixtures);
-  const reference = values.control ? await readReference() : undefined;
-  const brief = values.brief ? await readFile(values.brief, 'utf8') : inline;
-  const runtime = reference ? null : await ollama('/api/version', undefined, 3000).catch(() => null);
-  const tags = reference ? [] : (await ollama('/api/tags', undefined, 3000)
-    .catch(error => { if (replay || comparing || escalationModel) throw error; return null; }))?.models ?? [];
-  if (escalationModel && !installedDigest(tags, escalationModel)) {
-    throw new Error(`Escalation model is not installed: ${escalationModel}`);
+  const spec = validateSpec(input);
+  const needsModels = spec.arms.some(arm => arm.model !== checkedIn);
+  const runtime = needsModels ? await ollama('/api/version', undefined, 3000).catch(() => null) : null;
+  const tags = needsModels ? (await ollama('/api/tags', undefined, 3000)).models ?? [] : [];
+  for (const arm of spec.arms) {
+    if (arm.model !== checkedIn && !installedDigest(tags, arm.model)) throw new Error(`Model is not installed: ${arm.model}`);
   }
-  const { pairs, skipped } = replay ? await readReplay(args, tags) : { pairs: [], skipped: [] };
-  const digest = comparing ? installedDigest(tags, models[0]) : undefined;
-  if (comparing && !digest) throw new Error(`Model is not installed: ${models[0]}`);
-  const cases = comparing ? names.map((name, index) => ({
-    model: models[0], name, brief: fixtures[name].brief, pairId: String(index + 1),
-    order: randomInt(2) ? ['javascript', 'typescript'] : ['typescript', 'javascript'],
-  })) : replay ? pairs : reference ? [{ model: 'Checked-in view', name: 'bezier', reference }] :
-    models.flatMap(model => generating ? [{ model, name: 'custom', brief }] :
-      names.map(name => ({ model, name, brief: fixtures[name].brief })));
+
+  const targets = spec.brief ? [{ name: 'custom', brief: spec.brief, exclude: [] }]
+    : spec.fixtures.map(name => ({
+      name, brief: fixtures[name].brief, fixture: fixtures[name], view: fixtures[name].view,
+      exclude: [name, fixtures[name].view, ...(fixtures[name].excludeViews ?? [])].filter(Boolean),
+    }));
+  const order = Object.fromEntries(targets.map(target => [target.name, shuffled(spec.arms.map(arm => arm.id))]));
+  const cases = targets.flatMap(target => order[target.name].flatMap(id => {
+    const arm = spec.arms.find(item => item.id === id);
+    if (arm.model === checkedIn && !target.view) return [];
+    return Array.from({ length: arm.samples }, (_, index) => ({ arm: id, fixture: target.name, sample: index + 1 }));
+  }));
 
   const reservedId = process.env.VIZINT_EVAL_RUN_ID;
-  if (reservedId && (!runIdPattern.test(reservedId) || generating)) throw new Error('Invalid reserved evaluation run ID');
+  if (reservedId && !runIdPattern.test(reservedId)) throw new Error('Invalid reserved evaluation run ID');
   const folder = resolve('.view-generation', reservedId ??
     new Date().toISOString().replaceAll(':', '-') + '-' + randomUUID().slice(0, 8));
-  if (!reservedId) await mkdir(folder, { recursive: true });
+  await mkdir(folder, { recursive: true });
   const sources = await Promise.all([
-    import.meta.url, new URL('./view-repair-policy.mjs', import.meta.url),
+    import.meta.url, new URL('./view-repair-policy.mjs', import.meta.url), new URL('./view-examples.mjs', import.meta.url),
     new URL('./activity-libraries.mjs', import.meta.url), new URL('../package-lock.json', import.meta.url),
     ...Object.keys(activityLibraries).map(name => new URL(`./activity-library-examples/${name}.js`, import.meta.url)),
-    new URL('./view-generation-fixtures.mjs', import.meta.url),
+    new URL('./view-generation-fixtures.mjs', import.meta.url), new URL('./activity-codemod.mjs', import.meta.url),
     new URL('./activity-frame.mjs', import.meta.url), new URL('./activity-program.mjs', import.meta.url),
   ].map(url => readFile(new URL(url))));
   const fingerprint = createHash('sha256');
   for (const source of sources) fingerprint.update(source).update('\0');
   const runnerHash = fingerprint.update(common).digest('hex');
   const checks = createHash('sha256');
-  for (const source of sources.slice(2)) checks.update(source).update('\0');
+  for (const source of sources.slice(3)) checks.update(source).update('\0');
   const checkHash = checks.update(common).update(checkDraft.toString()).update(checkBrowser.toString()).digest('hex');
-  const commit = git(['rev-parse', 'HEAD']);
   const status = git(['status', '--porcelain']);
   const metadata = {
-    command, retryEnabled: replay || policy !== 'none', repairPolicy: replay ? undefined : policy,
-    escalationModel, runnerHash, checkHash, modelDigest: digest,
-    git: { commit, dirty: status === null ? null : Boolean(status) },
+    command: 'run', runnerHash, checkHash,
+    git: { commit: git(['rev-parse', 'HEAD']), dirty: status === null ? null : Boolean(status) },
     node: process.version, typescript: ts.version, ollama: runtime?.version,
-    cases: cases.map(({ model, name, brief, pairId, source, order }) =>
-      ({ model, fixture: name, brief, pairId, source, order })),
-    ...(replay && { skipped, sourceRunIds: [...new Set(args)] }),
+    models: Object.fromEntries(spec.arms.filter(arm => arm.model !== checkedIn)
+      .map(arm => [arm.model, installedDigest(tags, arm.model)])),
+    order, cases,
   };
+  await writeFile(join(folder, 'experiment.json'), JSON.stringify(spec, null, 2));
   await writeFile(join(folder, 'run.json'), JSON.stringify(metadata, null, 2));
   const rows = [];
   await saveResults(folder, rows);
   const runId = basename(folder);
-  console.log(`Run ${runId}: http://127.0.0.1:8765/runs/${runId} (mise run views:admin)`);
+  console.log(`Run ${runId}: open it in the evaluation dashboard (mise run views:admin)`);
   if (!cases.length) {
     process.exitCode = 1;
     return;
@@ -681,40 +675,35 @@ The loop and replay accept --escalation-model NAME.`);
   const browser = await chromium.launch(process.env.CHROME_PATH
     ? { executablePath: process.env.CHROME_PATH }
     : { channel: 'chrome' });
+  const examples = new Map();
   try {
     metadata.browser = browser.version();
     await writeFile(join(folder, 'run.json'), JSON.stringify(metadata, null, 2));
-    for (const entry of cases) {
-      if (comparing) {
-        await runLanguageComparison({ entry, folder, browser, rows, digest });
-        continue;
-      }
-      if (!replay) {
-        const row = { model: entry.model, name: entry.name, policy: entry.reference ? 'none' : policy,
-          attempts: [], finished: false };
-        rows.push(row);
-        await runCase({ entry, row, folder, browser, tags, rows, escalationModel });
-        continue;
-      }
-      const path = `case-${rows.length + 1}-attempt-1`;
-      const shared = await attempt({ ...entry, folder: join(folder, path), browser, fixture: fixtures[entry.name] });
-      shared.path = path;
-      for (const [index, arm] of entry.order.entries()) {
-        const row = { model: entry.model, name: entry.name, pairId: entry.pairId,
-          source: entry.source, order: index + 1, policy: arm, attempts: [], finished: false };
-        rows.push(row);
-        await runCase({ entry, row, folder, browser, tags, rows, escalationModel, shared });
-      }
+    for (const planned of cases) {
+      const arm = spec.arms.find(item => item.id === planned.arm);
+      const target = { ...targets.find(item => item.name === planned.fixture) };
+      if (arm.model === checkedIn) target.reference = await readView(target.view);
+      const key = `${arm.examples}\0${target.name}`;
+      if (!examples.has(key)) examples.set(key, await selectExample(arm.examples, target.brief, { exclude: target.exclude }));
+      const row = { ...planned, model: arm.model, attempts: [], finished: false };
+      rows.push(row);
+      await runSample({ arm, target, row, folder, browser, tags, rows, example: examples.get(key) });
     }
   } finally {
     await browser.close();
   }
-  if (replay || comparing ? rows.some(row => row.stopReason === 'infrastructure-error') : rows.some(row => !row.passed)) {
+  for (const arm of spec.arms) {
+    const own = rows.filter(row => row.arm === arm.id);
+    console.log(`${arm.id} ${arm.label}: ${tiers.toReversed().map(tier => `${tier} ${own.filter(row => row.tier === tier).length}`).join(', ')}`);
+  }
+  if (generating ? !rows.some(row => row.passed) : rows.some(row => row.stopReason === 'infrastructure-error')) {
     process.exitCode = 1;
   }
 }
 
-main().catch(error => {
-  console.error(error.message);
-  process.exitCode = 1;
-});
+if (import.meta.main) {
+  main().catch(error => {
+    console.error(error.message);
+    process.exitCode = 1;
+  });
+}

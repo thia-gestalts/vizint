@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}New run · Vizint evaluations{% endblock %}
+{% block content %}
+<div>
+  <h1>New run</h1>
+  <p class="muted">A run tests one hypothesis. Each arm is a generation setup. Every arm gets the same fixtures and the same number of samples, in a shuffled order.</p>
+</div>
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+{% if model_error %}<p class="error">{{ model_error }}</p>{% endif %}
+{% if active_job %}<p class="error">A run is in progress. <a href="{{ url_for('run_page', run_id=active_job) }}">Open it</a> to watch or cancel it before starting another.</p>{% endif %}
+
+<form class="stack card" method="post" action="{{ url_for('create_run') }}" id="new-run">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label class="field">Hypothesis
+    <span class="hint">What this run should tell you, e.g. “A retrieved example view raises the working rate for qwen3.5:4b.”</span>
+    <input type="text" name="hypothesis" required maxlength="{{ options.limits.hypothesis }}" value="{{ form.hypothesis }}">
+  </label>
+
+  <fieldset>
+    <legend>Target</legend>
+    <div class="choices">
+      <label><input type="radio" name="target" value="fixtures"{% if form.target != 'brief' %} checked{% endif %}> Benchmark fixtures <span class="hint">with interaction checks</span></label>
+      <label><input type="radio" name="target" value="brief"{% if form.target == 'brief' %} checked{% endif %}> Custom brief <span class="hint">startup and type checks only</span></label>
+    </div>
+    <div class="choices" data-target="fixtures" style="margin-top: .75rem">
+      {% for fixture in options.fixtures %}
+      <label title="{{ fixture.brief }}"><input type="checkbox" name="fixture" value="{{ fixture.name }}"{% if fixture.name in form.fixtures %} checked{% endif %}> {{ fixture.name }}{% if fixture.view %} <span class="hint">(has checked-in view)</span>{% endif %}</label>
+      {% endfor %}
+    </div>
+    <label class="field" data-target="brief" style="margin-top: .75rem">Brief
+      <textarea name="brief" maxlength="{{ options.limits.brief }}">{{ form.brief }}</textarea>
+    </label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Arms</legend>
+    <div class="table-scroll">
+    <table class="arms">
+      <thead><tr><th scope="col">Arm</th><th scope="col">Model</th><th scope="col">Example view</th><th scope="col">Samples</th><th scope="col">Temperature</th><th scope="col">Repair</th><th scope="col">Reply format</th></tr></thead>
+      <tbody>
+      {% for arm in form.arms %}{% set i = loop.index0 %}
+      <tr class="{{ '' if arm.enabled else 'off' }}">
+        <td><label><input type="checkbox" name="arm-{{ i }}-enabled" value="1"{% if arm.enabled %} checked{% endif %}> {{ 'ABCD'[i] }}</label></td>
+        <td><select name="arm-{{ i }}-model" aria-label="Arm {{ 'ABCD'[i] }} model">
+          {% for model in models + [options.checkedIn] %}<option{% if model == arm.model %} selected{% endif %}>{{ model }}</option>{% endfor %}
+        </select></td>
+        <td><select name="arm-{{ i }}-examples" aria-label="Arm {{ 'ABCD'[i] }} example view">
+          {% for mode in options.exampleModes %}<option{% if mode == arm.examples %} selected{% endif %}>{{ mode }}</option>{% endfor %}
+        </select></td>
+        <td><input type="number" name="arm-{{ i }}-samples" min="1" max="{{ options.limits.samples }}" value="{{ arm.samples }}" aria-label="Arm {{ 'ABCD'[i] }} samples"></td>
+        <td><input type="number" name="arm-{{ i }}-temperature" min="0" max="{{ options.limits.temperature }}" step="0.1" value="{{ arm.temperature }}" aria-label="Arm {{ 'ABCD'[i] }} temperature"></td>
+        <td><select name="arm-{{ i }}-repair" aria-label="Arm {{ 'ABCD'[i] }} repair">
+          {% for policy in options.repairPolicies %}<option{% if policy == arm.repair %} selected{% endif %}>{{ policy }}</option>{% endfor %}
+        </select></td>
+        <td><select name="arm-{{ i }}-format" aria-label="Arm {{ 'ABCD'[i] }} reply format">
+          {% for format in options.formats %}<option{% if format == arm.format %} selected{% endif %}>{{ format }}</option>{% endfor %}
+        </select></td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    <p class="hint">Example view: <b>none</b>, <b>fixed</b> (always the squared-errors view) or <b>retrieved</b> (the most relevant checked-in view, never the fixture’s own).
+      <b>{{ options.checkedIn }}</b> runs the checked-in view as a control, where one exists. Repair adds up to {{ 3 }} follow-up calls per sample.</p>
+  </fieldset>
+
+  <div class="row">
+    <button class="button primary"{% if active_job %} disabled{% endif %}>Start run</button>
+    <span class="muted small" id="estimate" aria-live="polite"></span>
+  </div>
+</form>
+<script>
+  const form = document.getElementById('new-run');
+  const estimate = document.getElementById('estimate');
+  function update() {
+    const brief = form.target.value === 'brief';
+    for (const element of form.querySelectorAll('[data-target]')) element.hidden = (element.dataset.target === 'brief') !== brief;
+    const targets = brief ? 1 : form.querySelectorAll('[name=fixture]:checked').length;
+    let samples = 0;
+    form.querySelectorAll('tbody tr').forEach((row, index) => {
+      const on = form[`arm-${index}-enabled`].checked;
+      row.classList.toggle('off', !on);
+      if (on && form[`arm-${index}-model`].value !== '{{ options.checkedIn }}') samples += Number(form[`arm-${index}-samples`].value) || 0;
+    });
+    const total = samples * targets;
+    estimate.textContent = total ? `${total} model samples, about ${Math.max(1, Math.round(total * 40 / 60))} min` : '';
+  }
+  form.addEventListener('input', update);
+  update();
+</script>
+{% endblock %}

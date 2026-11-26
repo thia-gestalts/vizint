@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% import "macros.html" as m with context %}
+{% block title %}{{ sample.fixture }} {{ sample.arm }}#{{ sample.sample }} · Vizint evaluations{% endblock %}
+{% block content %}
+<header>
+  <p class="eyebrow"><a href="{{ url_for('run_page', run_id=run_id) }}">{{ spec.hypothesis }}</a></p>
+  <h1>{{ sample.fixture }} · arm {{ sample.arm }} · sample {{ sample.sample }}</h1>
+  <div class="row">{{ m.tier(sample.tier) }}<span class="muted small">{{ arm.label }} · stop reason {{ sample.stopReason or 'in progress' }} · selected {{ sample.selectedAttempt or 'none' }}</span></div>
+</header>
+
+{% for attempt in sample.attempts %}
+<section class="card" id="{{ attempt.path }}">
+  <div class="row">
+    <h2 style="margin: 0">Attempt {{ loop.index }} <span class="muted small" style="font-weight: 400">{{ attempt.strategy }}{% if attempt.think %} · thinking{% endif %}</span></h2>
+    {{ m.tier(attempt.tier) }}
+    {% if attempt.path == sample.selectedAttempt %}<span class="badge">selected</span>{% endif %}
+    <span class="spacer"></span>
+    {{ m.checks(attempt.checks) }}
+  </div>
+  <div class="grid-2" style="margin-top: .75rem">
+    <div>
+      {% if attempt.artifacts['preview.png'] %}<img src="{{ attempt.artifacts['preview.png'] }}" alt="Preview of attempt {{ loop.index }}" style="max-width: 100%; border: 1px solid var(--line); border-radius: 4px">{% endif %}
+      <p class="small">{% for name, link in attempt.artifacts.items() if name != 'preview.png' %}<a href="{{ link }}?view=1">{{ name }}</a>{% if not loop.last %} · {% endif %}{% endfor %}</p>
+    </div>
+    <dl class="facts">
+      {% if attempt.example %}<dt>Example</dt><dd>{{ attempt.example.mode }}{% if attempt.example.slug %}: {{ attempt.example.slug }}{% endif %}{% if attempt.example.retrieval %} <span class="muted">({{ attempt.example.retrieval }})</span>{% endif %}{% if attempt.example.skipped %} <span class="muted">· {{ attempt.example.skipped }}</span>{% endif %}</dd>{% endif %}
+      <dt>Type errors</dt><dd>{{ attempt.checks.typeErrorsRaw if attempt.checks.typeErrorsRaw is defined else '–' }} raw → {{ attempt.checks.typeErrors if attempt.checks.typeErrors is defined else '–' }}
+        {% if attempt.codemod %}<span class="muted">({% for fix in attempt.codemod %}{{ fix.kind }} ×{{ fix.count }}{% if not loop.last %}, {% endif %}{% endfor %})</span>{% endif %}</dd>
+      <dt>Tokens</dt><dd>{{ attempt.promptTokens or '–' }} in · {{ attempt.outputTokens or '–' }} out{% if attempt.doneReason %} · {{ attempt.doneReason }}{% endif %}</dd>
+      <dt>Time</dt><dd>{{ attempt.seconds | round(1) if attempt.seconds else '–' }} s{% if attempt.model and attempt.model.vramBytes and attempt.model.bytes %} · {{ (100 * attempt.model.vramBytes / attempt.model.bytes) | round | int }}% in VRAM{% endif %}</dd>
+      {% if attempt.options %}<dt>Options</dt><dd class="mono">{{ attempt.options | tojson }}</dd>{% endif %}
+      {% if attempt.regressions %}<dt>Regressed</dt><dd>{{ attempt.regressions | join(', ') }}</dd>{% endif %}
+      {% if attempt.libraryRequest %}<dt>Library request</dt><dd>{{ attempt.libraryRequest.package }} ({{ 'available' if attempt.libraryRequest.available else 'unavailable' }}): {{ attempt.libraryRequest.reason }}</dd>{% endif %}
+    </dl>
+  </div>
+  {% if attempt.diagnostics %}
+  <details{% if loop.last %} open{% endif %}>
+    <summary>Diagnostics ({{ attempt.diagnostics | length }})</summary>
+    {% for item in attempt.diagnostics %}
+    <p class="small" style="margin: .5rem 0 .25rem"><b>{{ item.stage }}</b>{% if item.code %} TS{{ item.code }} ×{{ item.count }}{% endif %}</p>
+    <pre>{{ item.message }}</pre>
+    {% endfor %}
+  </details>
+  {% endif %}
+</section>
+{% endfor %}
+{% endblock %}

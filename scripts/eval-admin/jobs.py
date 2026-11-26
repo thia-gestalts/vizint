@@ -15,6 +15,10 @@ RUNNER = PROJECT / "scripts/view-generation.mjs"
 ACTIVE = ("queued", "running", "cancelling")
 
 
+class SpecError(ValueError):
+    pass
+
+
 def job_state(folder):
     try:
         file = folder / "job.json"
@@ -36,15 +40,34 @@ def models():
     endpoint = os.environ.get("VIZINT_OLLAMA_URL", "http://localhost:11434")
     try:
         with urlopen(endpoint.rstrip("/") + "/api/tags", timeout=2) as response:
-            return sorted({item["name"] for item in json.load(response)["models"]}), None
+            names = sorted({item["name"] for item in json.load(response)["models"]})
+            return [name for name in names if "embed" not in name], None
     except (OSError, URLError, ValueError, KeyError, TypeError):
-        return [], "Ollama models are unavailable. The Bézier control can still run."
+        return [], "Ollama is unavailable. Only checked-in control arms can run."
 
 
-def fixtures():
+def describe():
     result = subprocess.run(["node", str(RUNNER), "describe"], cwd=PROJECT,
-                            capture_output=True, check=True, timeout=5)
-    return json.loads(result.stdout)["fixtures"]
+                            capture_output=True, check=True, timeout=10)
+    return json.loads(result.stdout)
+
+
+def validate(spec):
+    """Normalize a spec with the runner's own validation; raise SpecError with its message."""
+    result = subprocess.run(["node", str(RUNNER), "validate"], cwd=PROJECT, input=json.dumps(spec).encode(),
+                            capture_output=True, timeout=10)
+    try:
+        value = json.loads(result.stdout)
+    except ValueError:
+        raise SpecError(result.stderr.decode(errors="replace").strip() or "The runner could not validate the spec")
+    if result.returncode or "error" in value:
+        raise SpecError(value.get("error", "Invalid run spec"))
+    installed, _ = models()
+    missing = sorted({arm["model"] for arm in value["arms"]
+                      if arm["model"] != "checked-in" and arm["model"] not in installed})
+    if missing:
+        raise SpecError("Model is not installed: " + ", ".join(missing))
+    return value
 
 
 def recover_abandoned(root):
@@ -68,7 +91,8 @@ def active_job(root):
         return None
 
 
-def launch(root, args, action):
+def launch(root, spec):
+    """Start a validated spec. Returns (run_id, started); run_id is the active run when busy."""
     root.mkdir(exist_ok=True)
     with (root / ".admin.lock").open("a+") as lock:
         try:
@@ -81,12 +105,14 @@ def launch(root, args, action):
             "+00:00", "Z").replace(":", "-") + "-" + uuid4().hex[:8]
         folder = root / run_id
         folder.mkdir()
+        (folder / "experiment.json").write_text(json.dumps(spec, indent=2))
         lock.seek(0)
         lock.truncate()
         lock.write(run_id)
         lock.flush()
-        state = {"action": action, "status": "queued"}
+        state = {"status": "queued", "queuedAt": datetime.now(timezone.utc).isoformat(timespec="seconds")}
         save_job(folder, state)
+        args = ["run", "--spec", str(folder / "experiment.json")]
         try:
             with (folder / "runner.log").open("ab") as log:
                 subprocess.Popen([sys.executable, str(Path(__file__).resolve()), str(folder), str(lock.fileno()), *args],
@@ -98,8 +124,9 @@ def launch(root, args, action):
 
 
 def worker(folder, args, lock_fd=None):
-    state = job_state(folder)
-    save_job(folder, {**state, "status": "running"})
+    state = {**job_state(folder), "status": "running",
+             "startedAt": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+    save_job(folder, state)
     result = {}
     try:
         env = {**os.environ, "VIZINT_EVAL_RUN_ID": folder.name}
@@ -126,22 +153,13 @@ def worker(folder, args, lock_fd=None):
                 except ProcessLookupError:
                     process.wait()
         result["exitCode"] = process.returncode
-        if cancelled:
-            status = "cancelled"
-        elif process.returncode == 0:
-            status = "completed"
-        elif state["action"] in ("eval", "control") and process.returncode == 1:
-            rows = json.loads((folder / "results.json").read_text())
-            planned = json.loads((folder / "run.json").read_text())["cases"]
-            status = "completed" if rows and len(rows) == len(planned) and all(
-                row.get("finished") and row.get("stopReason") != "infrastructure-error" for row in rows
-            ) else "failed"
-        else:
-            status = "failed"
-    except (OSError, ValueError, KeyError) as error:
+        # The runner exits nonzero only for infrastructure errors; draft outcomes are results.
+        status = "cancelled" if cancelled else "completed" if process.returncode == 0 else "failed"
+    except OSError as error:
         status = "failed"
         result["error"] = str(error)
-    save_job(folder, {**state, **result, "status": status})
+    save_job(folder, {**state, **result, "status": status,
+                      "finishedAt": datetime.now(timezone.utc).isoformat(timespec="seconds")})
 
 
 if __name__ == "__main__":

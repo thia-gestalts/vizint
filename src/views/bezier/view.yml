@@ -5,6 +5,7 @@ title: Bézier explorer
 intro: Drag a control point to reshape the curve. Move t to see how repeated
   interpolation locates a point on it.
 type: engagement
+patterns: [svg-plot, drag-handles, keyboard-handles, range-slider, live-geometry]
 source: Inspired by “How a Bézier curve is drawn” in the Gestalts visualization
   examples.
 learning:

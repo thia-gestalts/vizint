@@ -75,6 +75,7 @@ Keep the SVG plot coordinates fixed when the threshold changes.`,
     },
   },
   bezier: {
+    view: 'bezier',
     brief: `Teach cubic Bézier curves through repeated linear interpolation. Use SVG
 with viewBox 0 0 640 320. Start with control points [48,265], [168,42],
 [466,42], [592,265]. Make all four points draggable and keyboard-accessible.
