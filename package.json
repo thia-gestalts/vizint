@@ -4,12 +4,14 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build.mjs && tailwindcss -i src/site.css -o dist/site.css --minify",
+    "check:views": "node scripts/check-views.mjs",
     "start": "node scripts/serve.mjs"
   },
   "devDependencies": {
     "@tailwindcss/cli": "^4.3.5",
     "daisyui": "^5.8.2",
     "lucide-static": "^1.80.0",
-    "tailwindcss": "^4.3.5"
+    "tailwindcss": "^4.3.5",
+    "typescript": "5.9.3"
   }
 }

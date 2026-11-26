@@ -1,19 +1,20 @@
 const prediction = 5;
 const baseline = 198;
 const units = 16;
-const plot = document.querySelector('#plot');
-const handles = Array.from(plot.querySelectorAll('.handle'));
+const plot = /** @type {SVGSVGElement} */ (document.querySelector('#plot'));
+const handles = /** @type {NodeListOf<SVGGElement>} */ (plot.querySelectorAll('.handle'));
 const errors = Array.from(plot.querySelectorAll('.error'));
-const calculation = document.querySelector('#calculation');
-const values = handles.map((handle) => Number(handle.getAttribute('aria-valuenow')));
+const calculation = /** @type {HTMLOutputElement} */ (document.querySelector('#calculation'));
+const values = Array.from(handles, (handle) => Number(handle.getAttribute('aria-valuenow')));
 function draw() {
   const squares = values.map((value, index) => {
     const y = baseline - value * units;
     const handle = handles[index];
     handle.setAttribute('transform', `translate(${handle.dataset.x} ${y})`);
-    handle.setAttribute('aria-valuenow', value);
-    handle.querySelector('text').textContent = value;
-    errors[index].setAttribute('y1', y);
+    handle.setAttribute('aria-valuenow', String(value));
+    const label = handle.querySelector('text');
+    if (label) label.textContent = String(value);
+    errors[index].setAttribute('y1', String(y));
     return (value - prediction) ** 2;
   });
   const mean = squares.reduce((sum, square) => sum + square, 0) / values.length;
