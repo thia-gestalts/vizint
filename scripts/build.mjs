@@ -2,7 +2,7 @@ import { build } from 'esbuild';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { app, entries } from '../src/catalog.mjs';
 import { readActivityScript } from './activity-script.mjs';
 import { buildLearningGraph, exerciseAnchor } from './learning-graph.mjs';
@@ -108,22 +108,7 @@ await writeFile(new URL('catalog.mjs', output),
   `export const app = ${JSON.stringify(app)};\nexport const entries = ${JSON.stringify(graph.eventEntries)};\n`);
 await cp(new URL(vendor, root), new URL('schemas/', output), { recursive: true });
 await cp(new URL('LICENSE', lucide), new URL('lucide-license.txt', output));
-await writeFile(new URL('index.html', output), page('Vizint', '', `
-  <h1 class="text-3xl font-semibold tracking-tight sm:text-5xl">Explore and practice</h1>
-  <a class="btn btn-outline mt-4" href="./learn/">${icon('search')} Find learning material</a>
-  <div class="mt-6 grid gap-4 sm:mt-8 sm:grid-cols-2">${entries.map(({ slug, title, intro, type }) => `
-    <article class="card relative rounded-xl border border-base-300 bg-base-100 transition-colors hover:border-primary focus-within:border-primary">
-      <div class="card-body gap-3">
-        <div class="flex items-center justify-between text-primary">
-          <span class="grid size-10 place-items-center rounded-lg bg-primary/10">${icon(type === 'attempt' ? 'pencil-line' : 'compass')}</span>
-          ${icon('arrow-right')}
-        </div>
-        <h2 class="card-title leading-snug"><a class="after:absolute after:inset-0 after:rounded-xl" href="./${slug}/">${escapeHTML(title)}</a></h2>
-        <p class="text-sm leading-relaxed text-base-content/75">${escapeHTML(intro)}</p>
-      </div>
-    </article>`).join('')}
-  </div>`));
-
+const previews = new Set();
 await writeLearningPages({ output, page, entries, graph });
 
 for (const entry of entries) {
@@ -147,6 +132,11 @@ for (const entry of entries) {
 <body>${markup}<script>${code.replace(/<\/script/gi, '<\\/script')}</script></body></html>`;
   const path = new URL(`${slug}/`, output);
   await mkdir(path);
+  const folder = new URL(`src/${slug}/`, root);
+  if ((await readdir(folder)).includes('preview.png')) {
+    await cp(new URL('preview.png', folder), new URL('preview.png', path));
+    previews.add(slug);
+  }
   if (entry.assets) await cp(new URL(`src/${slug}/${entry.assets}/`, root), new URL(`${entry.assets}/`, path), { recursive: true });
   if (entry.customHost) await writeFile(new URL('host.mjs', path), await bundle('host.mjs', 'esm', ['../catalog.mjs', '../storage.mjs']));
   await writeFile(new URL('index.html', path), page(`${title} | Vizint`, '../', `
@@ -176,5 +166,21 @@ for (const entry of entries) {
     }).join('')}
     ${source ? `<footer class="mt-5 text-sm text-base-content/75">${escapeHTML(source)}</footer>` : ''}`,  `<script type="module" src="${entry.customHost ? './' : '../'}host.mjs"></script>`));
 }
+
+await writeFile(new URL('index.html', output), page('Vizint', '', `
+  <h1 class="text-3xl font-semibold tracking-tight sm:text-5xl">Explore and practice</h1>
+  <a class="btn btn-outline mt-4" href="./learn/">${icon('search')} Find learning material</a>
+  <div class="mt-6 grid gap-5 sm:mt-8 sm:grid-cols-2">${entries.map(({ slug, title, intro }) => `
+    <article class="card relative rounded-xl border border-base-300 bg-base-100 transition-colors hover:border-primary focus-within:border-primary">
+      ${previews.has(slug) ? `<img class="h-auto w-full rounded-t-xl border-b border-base-300 bg-base-200 object-cover" src="./${slug}/preview.png" width="768" height="464" alt="" decoding="async">` : ''}
+      <div class="card-body gap-2 p-5">
+        <div class="flex items-start justify-between gap-3">
+          <h2 class="card-title leading-snug"><a class="after:absolute after:inset-0 after:rounded-xl" href="./${slug}/">${escapeHTML(title)}</a></h2>
+          <span class="shrink-0 text-primary">${icon('arrow-right')}</span>
+        </div>
+        <p class="text-sm leading-relaxed text-base-content/75">${escapeHTML(intro)}</p>
+      </div>
+    </article>`).join('')}
+  </div>`));
 
 console.log(`Built ${entries.length} entries for ${app} with schemas pinned to ${pin.commit}.`);

@@ -103,6 +103,7 @@ export const entries = [
   {
     slug: 'rounding',
     activity: 'round-to-nearest-tenth',
+    previewReady: '#options button',
     frameHeight: '21rem',
     title: 'Rounding to the nearest tenth',
     intro: 'Choose the value rounded to one decimal place. The hundredths digit tells you whether to round up.',

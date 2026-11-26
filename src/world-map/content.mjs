@@ -29,6 +29,7 @@ export function worldMapEntry(app) {
   });
   return {
     slug: 'world-map', activity: 'world-map', title: 'World Map', type: 'attempt',
+    previewReady: '#answers button',
     intro: 'Find and identify countries. Practice adapts as you learn their locations.',
     frameHeight: 'max(28rem, calc(100dvh - 5rem))',
     customHost: true, assets: 'data', collapseExercises: true,

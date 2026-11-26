@@ -2,13 +2,13 @@ import { createServer, request } from 'node:http';
 import { request as secureRequest } from 'node:https';
 import { readFile } from 'node:fs/promises';
 import { extname, resolve, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const upstream = new URL(process.env.OLYMP_ORIGIN || 'http://127.0.0.1:8787');
 const root = fileURLToPath(new URL('../dist/', import.meta.url));
 const mime = { '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript',
-  '.mjs': 'text/javascript', '.wasm': 'application/wasm', '.json': 'application/json' };
-const server = createServer(async (req, res) => {
+  '.mjs': 'text/javascript', '.wasm': 'application/wasm', '.json': 'application/json', '.png': 'image/png' };
+export const server = createServer(async (req, res) => {
   const path = new URL(req.url, 'http://localhost').pathname;
   if (path.startsWith('/v1/')) {
     const forward = (upstream.protocol === 'https:' ? secureRequest : request)(upstream, {
@@ -26,6 +26,8 @@ const server = createServer(async (req, res) => {
     res.end(body);
   } catch { res.writeHead(404); res.end(); }
 });
-server.listen(Number(process.env.PORT ?? 8000), '127.0.0.1', () => {
-  console.log('Vizint listening on http://127.0.0.1:' + server.address().port);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  server.listen(Number(process.env.PORT ?? 8000), '127.0.0.1', () => {
+    console.log('Vizint listening on http://127.0.0.1:' + server.address().port);
+  });
+}
