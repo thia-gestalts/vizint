@@ -1,3 +1,5 @@
+import { worldMapEntry } from './world-map/content.mjs';
+
 export const app = 'example.thia.vizint';
 
 const plotFrameHeight = 'calc(clamp(0px, 50vw - 1rem, 27rem) + 6rem)';
@@ -34,6 +36,7 @@ const roundingQuestion = question('bc64e437-1e88-4abc-9c09-b94e04f4e298',
   'Which digit tells you whether to round up to the nearest tenth?');
 
 export const entries = [
+  worldMapEntry(app),
   {
     slug: 'bezier',
     activity: 'bezier-explorer',

@@ -1,0 +1,26 @@
+:root { --panel: #fff; --text: #17253c; --border: #b4c3d4; color: var(--text); }
+:root[data-theme="dark"] { --panel: #17253c; --text: #ecf4ff; --border: #64748b; color-scheme: dark; }
+body { padding: 0; background: var(--panel); }
+button, select { border: 1px solid var(--border); border-radius: .65rem; padding: .45rem .8rem; color: var(--text); background: var(--panel); }
+button[aria-pressed="true"] { background: #17479c; color: white; }
+button:disabled { opacity: .65; }
+.tabs { display: flex; padding: .55rem; gap: .5rem; height: 3.45rem; }
+#practice { height: calc(100dvh - 3.45rem); position: relative; overflow: hidden; }
+#map { position: absolute; inset: 0; }
+#map svg { display: block; touch-action: none; }
+#prompt, #answers { position: absolute; inset-inline: .65rem; display: flex; justify-content: center; gap: .6rem; text-align: center; pointer-events: none; }
+#prompt { top: .6rem; isolation: isolate; margin: 0 auto; width: fit-content; max-width: calc(100% - 1.3rem); background: var(--panel); padding: .55rem .85rem; border-radius: .65rem; box-shadow: 0 2px 10px #10274825; }
+#answers { bottom: max(.8rem, env(safe-area-inset-bottom)); }
+#answers button { pointer-events: auto; max-width: 48%; }
+#answers .wrong { background: #8b2231; color: white; }
+#answers .correct { background: #166534; color: white; }
+.zoom { position: absolute; top: 50%; right: .65rem; transform: translateY(-50%); display: grid; gap: .35rem; }
+.zoom button { width: 2.5rem; height: 2.5rem; padding: 0; }
+@media (pointer: coarse) { .zoom { display: none; } }
+@media (hover: hover) and (pointer: fine) { path[data-pickable]:hover { filter: brightness(.88); cursor: pointer; } }
+#stats, #settings { padding: .75rem 1rem 1.5rem; }
+#summary { display: flex; flex-wrap: wrap; gap: .45rem 1rem; }
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; margin-top: 1rem; font-size: .9rem; }
+th, td { text-align: left; padding: .3rem .55rem; border-bottom: 1px solid var(--border); }
+#history meter { display: block; width: min(100%, 9rem); }

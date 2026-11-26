@@ -1,3 +1,5 @@
+import { build } from 'esbuild';
+import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
@@ -127,10 +129,14 @@ await writeLearningPages({ output, page, entries, graph });
 for (const entry of entries) {
   const { slug, activity, title, intro, source, frameHeight, learning, type } = entry;
   const exercises = learning?.exercises ?? [];
-  const activeExercise = type === 'attempt' ? exercises[0] : undefined;
+  const activeExercise = !entry.customHost && type === 'attempt' ? exercises[0] : undefined;
   const links = graph.byActivity.get(activity);
   const markup = await read(`src/${slug}/activity.html`);
-  const { source: code } = await readActivityScript(entry);
+  const bundle = async (filename, format, external = []) => (await build({
+    entryPoints: [fileURLToPath(new URL(`src/${slug}/${filename}`, root))],
+    bundle: true, format, external, write: false, minify: true, legalComments: 'inline',
+  })).outputFiles[0].text;
+  const code = entry.customHost ? await bundle('activity.js', 'iife') : (await readActivityScript(entry)).source;
   const styles = await read(`src/${slug}/activity.css`);
   const common = await read('src/frame.css');
   // Activity scripts exist only inside the sandboxed document in the output.
@@ -141,6 +147,8 @@ for (const entry of entries) {
 <body>${markup}<script>${code.replace(/<\/script/gi, '<\\/script')}</script></body></html>`;
   const path = new URL(`${slug}/`, output);
   await mkdir(path);
+  if (entry.assets) await cp(new URL(`src/${slug}/${entry.assets}/`, root), new URL(`${entry.assets}/`, path), { recursive: true });
+  if (entry.customHost) await writeFile(new URL('host.mjs', path), await bundle('host.mjs', 'esm', ['../catalog.mjs', '../storage.mjs']));
   await writeFile(new URL('index.html', path), page(`${title} | Vizint`, '../', `
     <div class="flex flex-wrap items-center gap-2">
       <a class="btn btn-ghost btn-sm -ml-2" href="../">${icon('arrow-left')} All activities</a>
@@ -160,12 +168,13 @@ for (const entry of entries) {
       const details = activityLearning(links, exercise);
       if (!details) return '';
       const anchor = exercise === activeExercise ? '' : ` id="${exerciseAnchor(exercise)}"`;
+      if (entry.collapseExercises) return `<details${anchor} class="mt-6"><summary>${escapeHTML(exercise.title)}</summary>${details}</details>`;
       return `<section${anchor} class="mt-8">
         <h2 class="text-lg font-semibold">${escapeHTML(exercise.title)}</h2>
         ${details}
       </section>`;
     }).join('')}
-    ${source ? `<footer class="mt-5 text-sm text-base-content/75">${escapeHTML(source)}</footer>` : ''}`, '<script type="module" src="../host.mjs"></script>'));
+    ${source ? `<footer class="mt-5 text-sm text-base-content/75">${escapeHTML(source)}</footer>` : ''}`,  `<script type="module" src="${entry.customHost ? './' : '../'}host.mjs"></script>`));
 }
 
 console.log(`Built ${entries.length} entries for ${app} with schemas pinned to ${pin.commit}.`);

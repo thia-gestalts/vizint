@@ -1,3 +1,4 @@
+import { build } from 'esbuild';
 import { Script } from 'node:vm';
 import ts from 'typescript';
 import { entries } from '../src/catalog.mjs';
@@ -15,6 +16,13 @@ const options = {
 
 const diagnostics = [];
 for (const entry of entries) {
+  if (entry.customHost) {
+    const { outputFiles } = await build({
+      entryPoints: [`src/${entry.slug}/activity.js`], bundle: true, format: 'iife', write: false,
+    });
+    new Script(outputFiles[0].text);
+    continue;
+  }
   const { parts, source } = await readActivityScript(entry);
   const filename = parts.at(-1).file;
   const host = ts.createCompilerHost(options);

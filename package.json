@@ -9,9 +9,12 @@
   },
   "devDependencies": {
     "@tailwindcss/cli": "^4.3.5",
+    "d3": "7.9.0",
     "daisyui": "^5.8.2",
+    "esbuild": "0.28.2",
     "lucide-static": "^1.80.0",
     "tailwindcss": "^4.3.5",
+    "ts-fsrs": "5.4.1",
     "typescript": "5.9.3"
   }
 }

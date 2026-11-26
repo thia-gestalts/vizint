@@ -99,7 +99,8 @@ export function buildLearningGraph(entries, common) {
     }
   }
 
-  const eventEntries = entries.map(({ slug, activity, type, learning }) => {
+  const eventEntries = entries.map(({ slug, activity, type, learning, customHost }) => {
+    if (customHost) return { slug, activity, type, targets: learning.records };
     const exercise = learning?.exercises?.[0];
     if (type === 'attempt' && (learning?.exercises?.length !== 1 || !exercise?.assesses?.length)) {
       throw new Error(`Attempt ${activity} must define one assessed exercise for its interactive frame`);
