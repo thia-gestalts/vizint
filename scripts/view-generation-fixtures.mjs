@@ -18,6 +18,41 @@ function near(actual, expected, tolerance = 1) {
 }
 
 export const fixtures = {
+  'roc-auc': {
+    brief: `Teach binary-classifier evaluation with an SVG ROC curve and AUC.
+Use a labeled select id="ranking" with options perfect, tied and reversed.
+Use two positive and two negative examples with scores in [0, 1]. For
+perfect use positive scores 0.9 and 0.8 and negative scores 0.2 and 0.1.
+For tied give all examples 0.5. For reversed swap the labels from perfect.
+Compute the ROC curve by sweeping distinct score thresholds, grouping
+ties, and including both endpoints. Integrate in ascending FPR order.
+Display the numeric AUC in id="auc" to at least three decimal places.
+Use a labeled range id="threshold" from 0 to 1, step 0.01, to mark the
+operating point for scores greater than or equal to the threshold. Give
+that SVG circle id="operating-point" and explicit numeric cx and cy.
+Keep the SVG plot coordinates fixed when the threshold changes.`,
+    async check(frame) {
+      const ranking = frame.locator('#ranking');
+      const auc = frame.locator('#auc');
+      const marker = frame.locator('#operating-point');
+      for (const [name, expected] of [['tied', 0.5], ['reversed', 0], ['perfect', 1]]) {
+        await ranking.selectOption(name);
+        near(parseFloat(await auc.innerText()), expected, 0.002);
+      }
+      await setRange(frame, '#threshold', 1);
+      const none = await point(marker);
+      await setRange(frame, '#threshold', 0.5);
+      const perfect = await point(marker);
+      near(perfect[0], none[0], 0.1);
+      assert.ok(perfect[1] < none[1], 'Lowering the threshold should raise TPR without raising FPR');
+      near(parseFloat(await auc.innerText()), 1, 0.002);
+      await setRange(frame, '#threshold', 0);
+      const all = await point(marker);
+      assert.ok(all[0] > perfect[0], 'Predicting all positives should raise FPR');
+      near(all[1], perfect[1], 0.1);
+      near(parseFloat(await auc.innerText()), 1, 0.002);
+    },
+  },
   bezier: {
     brief: `Teach cubic Bézier curves through repeated linear interpolation. Use SVG
 with viewBox 0 0 640 320. Start with control points [48,265], [168,42],
