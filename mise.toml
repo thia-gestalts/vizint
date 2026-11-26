@@ -8,4 +8,4 @@ run = ["npm ci", "npm run build"]
 [tasks.dev]
 description = "Build and serve Vizint locally"
 depends = ["setup"]
-run = "npm start"
+run = "OLYMP_ORIGIN=https://gestalter.koljasam.com npm start"
