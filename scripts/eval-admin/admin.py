@@ -79,7 +79,8 @@ def read_run(folder, include_artifacts=True):
         ]
         outcome = "pending"
         if attempts and row.get("finished", True):
-            outcome = "passed" if attempts[-1].get("passed") is True else "failed"
+            passed = row.get("passed", attempts[-1].get("passed"))
+            outcome = "passed" if passed is True else "failed"
         rows.append({**row, "attempts": attempts, "status": outcome})
     return {
         "id": folder.name, "settings": read_json(folder / "run.json", {}),
@@ -113,6 +114,7 @@ def list_runs(model: str | None = None, status: str = "all", limit: int = 20) ->
             continue
         summaries.append({**run, "cases": cases, "settings": {
             "command": run["settings"].get("command"),
+            **({"repairPolicy": run["settings"]["repairPolicy"]} if "repairPolicy" in run["settings"] else {}),
         }})
         if len(summaries) == limit:
             break
@@ -144,7 +146,8 @@ def read_attempt_artifact(run_id: str, attempt: str, name: str, offset: int = 0)
 def case_prompt(folder, settings, case):
     for planned in settings.get("cases", []):
         if (isinstance(planned, dict) and planned.get("model") == case.get("model")
-                and planned.get("fixture") == case.get("name")):
+                and planned.get("fixture") == case.get("name")
+                and planned.get("pairId") == case.get("pairId")):
             brief = planned.get("brief")
             if isinstance(brief, str) and brief.strip():
                 return brief
@@ -200,6 +203,31 @@ def dashboard():
     return render_template("index.html", groups=prompt_groups(runs, model), model=model, status=status)
 
 
+def replay_summary(run):
+    if run["settings"].get("command") != "replay":
+        return None
+    totals = {"loop only": 0, "once only": 0, "both": 0, "neither": 0, "incomplete": 0}
+    cutoffs = {arm: {seconds: 0 for seconds in (30, 60, 120)} for arm in ("once", "loop")}
+    by_pair = {}
+    for case in run["cases"]:
+        by_pair.setdefault(case.get("pairId"), {})[case.get("policy")] = case
+    for pair in run["settings"].get("cases", []):
+        arms = by_pair.get(pair["pairId"], {})
+        if any(arms.get(arm, {}).get("status") not in ("passed", "failed") or
+               arms[arm].get("stopReason") == "infrastructure-error" for arm in cutoffs):
+            totals["incomplete"] += 1
+            continue
+        winners = [arm for arm in cutoffs if arms[arm]["status"] == "passed"]
+        outcome = ("both" if len(winners) == 2 else f"{winners[0]} only") if winners else "neither"
+        totals[outcome] += 1
+        for arm in winners:
+            attempt = next(item for item in arms[arm]["attempts"] if item.get("passed"))
+            seconds = attempt.get("elapsedSeconds", 0)
+            for cutoff in cutoffs[arm]:
+                cutoffs[arm][cutoff] += int(seconds <= cutoff)
+    return {"totals": totals, "cutoffs": cutoffs}
+
+
 @flask.get("/runs/<run_id>")
 def detail(run_id):
     try:
@@ -208,7 +236,7 @@ def detail(run_id):
         abort(404)
     for case in run["cases"]:
         case["prompt"] = case_prompt(run_folder(run_id), run["settings"], case)
-    return render_template("detail.html", run=run)
+    return render_template("detail.html", run=run, replay=replay_summary(run))
 
 
 @flask.get("/api/runs")

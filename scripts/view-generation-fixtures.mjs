@@ -13,6 +13,11 @@ async function point(marker) {
   return coordinates;
 }
 
+async function readNumber(locator) {
+  await locator.waitFor({ state: 'visible' });
+  return parseFloat((await locator.textContent()) ?? '');
+}
+
 function near(actual, expected, tolerance = 1) {
   assert.ok(Math.abs(actual - expected) <= tolerance, `Expected ${expected} ± ${tolerance}, got ${actual}`);
 }
@@ -37,7 +42,7 @@ Keep the SVG plot coordinates fixed when the threshold changes.`,
       const marker = frame.locator('#operating-point');
       for (const [name, expected] of [['tied', 0.5], ['reversed', 0], ['perfect', 1]]) {
         await ranking.selectOption(name);
-        near(parseFloat(await auc.innerText()), expected, 0.002);
+        near(await readNumber(auc), expected, 0.002);
       }
       await setRange(frame, '#threshold', 1);
       const none = await point(marker);
@@ -45,12 +50,12 @@ Keep the SVG plot coordinates fixed when the threshold changes.`,
       const perfect = await point(marker);
       near(perfect[0], none[0], 0.1);
       assert.ok(perfect[1] < none[1], 'Lowering the threshold should raise TPR without raising FPR');
-      near(parseFloat(await auc.innerText()), 1, 0.002);
+      near(await readNumber(auc), 1, 0.002);
       await setRange(frame, '#threshold', 0);
       const all = await point(marker);
       assert.ok(all[0] > perfect[0], 'Predicting all positives should raise FPR');
       near(all[1], perfect[1], 0.1);
-      near(parseFloat(await auc.innerText()), 1, 0.002);
+      near(await readNumber(auc), 1, 0.002);
     },
   },
   bezier: {
@@ -105,8 +110,8 @@ Honor reduced motion by displaying a static diagram.`,
       for (const [stiffness, mass] of [[8, 2], [16, 2], [8, 4]]) {
         await setRange(frame, '#stiffness', stiffness);
         await setRange(frame, '#mass', mass);
-        const frequency = await frame.locator('#frequency').innerText();
-        near(parseFloat(frequency), Math.sqrt(stiffness / mass) / (2 * Math.PI), 0.002);
+        const frequency = await readNumber(frame.locator('#frequency'));
+        near(frequency, Math.sqrt(stiffness / mass) / (2 * Math.PI), 0.002);
       }
     },
   },

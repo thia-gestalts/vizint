@@ -9,22 +9,65 @@
   <pre class="mt-3 whitespace-pre-wrap break-words text-sm">{{ run.settings | tojson(indent=2) }}</pre>
 </details>
 {% endif %}
+{% if replay %}
+<section class="space-y-3 rounded-lg border border-slate-200 bg-white p-4">
+  <h2 class="text-xl font-semibold">Paired replay</h2>
+  <p class="text-sm">Pass counts use automated checks. Custom briefs have no interaction or teaching correctness check.</p>
+  <ul class="flex flex-wrap gap-x-5 gap-y-2 text-sm">
+    {% for label, count in replay.totals.items() %}<li>{{ label|capitalize }} <strong>{{ count }}</strong></li>{% endfor %}
+  </ul>
+  <table class="text-left text-sm">
+    <caption class="text-left font-medium">Cumulative passes in completed pairs</caption>
+    <thead><tr><th scope="col" class="pr-4">Policy</th>{% for cutoff in [30, 60, 120] %}<th scope="col" class="pr-4">{{ cutoff }}s</th>{% endfor %}</tr></thead>
+    <tbody>
+      {% for arm, counts in replay.cutoffs.items() %}
+      <tr><th scope="row" class="pr-4">{{ arm }}</th>{% for count in counts.values() %}<td class="pr-4">{{ count }}</td>{% endfor %}</tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if run.settings.skipped %}
+  <details>
+    <summary>{{ run.settings.skipped|length }} skipped source cases</summary>
+    <ul class="text-sm">{% for item in run.settings.skipped %}
+      <li><a class="underline" href="/runs/{{ item.runId }}">{{ item.runId }}</a>{% if item.attempt %} / {{ item.attempt }}{% endif %} · {{ item.reason }}</li>
+    {% endfor %}</ul>
+  </details>
+  {% endif %}
+</section>
+{% endif %}
 {% for case in run.cases %}
 <section class="space-y-3">
   {% if case.prompt %}<h2 class="whitespace-pre-wrap break-words text-xl font-semibold">{{ case.prompt }}</h2>{% endif %}
   <p class="font-medium">{{ case.model }} / {{ case.name }} <span class="text-sm font-normal text-slate-600">· {{ case.status }}</span></p>
+  {% if case.policy %}
+  <p class="text-sm">
+    {% if case.pairId %}Pair {{ case.pairId }} · Arm {{ case.order }} · {% endif %}
+    {{ case.policy }}{% if case.elapsedSeconds is defined %} · {{ case.elapsedSeconds|round(1) }}s repair time{% endif %}
+    {% if case.stopReason %} · {{ case.stopReason|replace('-', ' ') }}{% endif %}
+    {% if case.source %} · <a class="underline" href="/runs/{{ case.source.runId }}#{{ case.source.attempt }}">Source draft</a>{% if not case.source.digest %} (historical model digest unknown){% endif %}{% endif %}
+  </p>
+  {% endif %}
   <div class="grid gap-4 md:grid-cols-2">
     {% for attempt in case.attempts %}
-    <article class="min-w-0 space-y-3 rounded-lg border border-slate-200 bg-white p-4">
-      <h3 class="font-semibold">{{ 'First attempt' if loop.first else 'Retry' }} ·
+    <article {% if not case.pairId or case.order == 1 or not loop.first %}id="{{ attempt.path }}"{% endif %} class="min-w-0 space-y-3 rounded-lg border border-slate-200 bg-white p-4">
+      <h3 class="font-semibold">{{ 'Shared starting point' if attempt.strategy == 'replay-source' else 'Attempt ' ~ loop.index }} ·
         {% if attempt.passed %}<span class="text-emerald-700">Pass</span>{% else %}<span class="text-red-700">Fail</span>{% endif %}
+        {% if case.selectedAttempt == attempt.path %} · Selected{% endif %}
+        {% if attempt.regressions %} · Regressed {{ attempt.regressions|join(', ') }}{% endif %}
       </h3>
       <ul class="space-y-1 text-sm">
-        <li>{{ attempt.seconds }}s{% if attempt.strategy %} · {{ attempt.strategy }}{% endif %}{% if attempt.failure %} · {{ attempt.failure }}{% endif %}</li>
+        <li>{{ attempt.seconds|round(2) }}s{% if attempt.strategy %} · {{ attempt.strategy }}{% endif %}{% if attempt.failure %} · {{ attempt.failure }}{% endif %}</li>
         {% if attempt.options %}<li>{{ attempt.outputTokens | default('—') }}/{{ attempt.options.num_predict }} output tokens · {{ attempt.options.num_ctx }} context</li>{% endif %}
         {% if attempt.promptTokens is defined %}<li>{{ attempt.promptTokens }} prompt tokens</li>{% endif %}
         {% if attempt.model and attempt.model.bytes and attempt.model.vramBytes is defined %}<li>{{ (100 * attempt.model.vramBytes / attempt.model.bytes) | round | int }}% of loaded bytes in VRAM</li>{% endif %}
-        {% if attempt.checks %}<li>Syntax {{ attempt.checks.syntax }} · Browser {{ attempt.checks.browser }} · {{ attempt.checks.typeErrors | default('—') }} type errors</li>{% endif %}
+        {% if attempt.think is defined %}<li>{{ attempt.requestedModel }} · Thinking {{ 'on' if attempt.think else 'off' }}{% if attempt.loadSeconds is number %} · {{ attempt.loadSeconds|round(2) }}s load{% endif %}</li>{% endif %}
+        {% if attempt.libraries %}<li>Libraries {{ attempt.libraries|join(', ') }} · Bundle {{ attempt.checks.bundle }}</li>{% endif %}
+        {% if attempt.libraryRequest %}
+        <li><strong>Requested {{ attempt.libraryRequest.package }}{% if attempt.libraryRequest.requestedVersion %}@{{ attempt.libraryRequest.requestedVersion }}{% endif %}</strong> · {{ 'available' if attempt.libraryRequest.available else 'unavailable' }}{% if not attempt.libraryRequest.available and attempt.libraryRequest.installedVersion %} · installed {{ attempt.libraryRequest.installedVersion }}{% endif %}<br>{{ attempt.libraryRequest.reason }}</li>
+        {% endif %}
+        {% if attempt.checks.startup is defined %}
+        <li>Response {{ attempt.checks.response }} · Syntax {{ attempt.checks.syntax }} · Startup {{ attempt.checks.startup }} · Interaction fixture {{ attempt.checks.fixture }} · {{ attempt.checks.typeErrors | default('—') }} type errors</li>
+        {% elif attempt.checks %}<li>Syntax {{ attempt.checks.syntax }} · Browser {{ attempt.checks.browser }} · {{ attempt.checks.typeErrors | default('—') }} type errors</li>{% endif %}
       </ul>
       {% if 'preview.png' in attempt.artifacts %}
       <img class="w-full rounded border border-slate-200" loading="lazy" src="{{ attempt.artifacts['preview.png'] }}" alt="Activity preview">

@@ -1,4 +1,5 @@
 import { activityFrame } from './activity-frame.mjs';
+import { bundleActivity } from './activity-libraries.mjs';
 import { build } from 'esbuild';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
@@ -122,7 +123,13 @@ for (const entry of entries) {
     entryPoints: [fileURLToPath(new URL(`src/views/${slug}/${filename}`, root))],
     bundle: true, format, external, write: false, minify: true, legalComments: 'inline',
   })).outputFiles[0].text;
-  const code = entry.customHost ? await bundle('activity.js', 'iife') : (await readActivityScript(entry)).source;
+  let code;
+  if (entry.libraries?.length) {
+    const { source, parts } = await readActivityScript(entry);
+    code = await bundleActivity({ filename: parts.at(-1).file, source, libraries: entry.libraries });
+  } else {
+    code = entry.customHost ? await bundle('activity.js', 'iife') : (await readActivityScript(entry)).source;
+  }
   const styles = await read(`src/views/${slug}/activity.css`);
   const common = await read('src/frame.css');
   const frame = activityFrame({ title, common, styles, markup, code, media: entry.media });

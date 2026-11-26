@@ -30,6 +30,10 @@ run = "node scripts/view-generation.mjs generate"
 description = "Benchmark local Ollama models and save evaluation results"
 run = "node scripts/view-generation.mjs eval"
 
+[tasks."views:replay"]
+description = "Compare repair policies on saved first attempts"
+run = "node scripts/view-generation.mjs replay"
+
 [tasks."views:eval-control"]
 description = "Verify the evaluator against the checked-in Bézier view"
 run = "node scripts/view-generation.mjs eval --control"

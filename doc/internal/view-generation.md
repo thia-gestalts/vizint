@@ -19,20 +19,38 @@ The control runs the checked-in Bézier view without Ollama. The default
 benchmark runs Bézier, spring–mass, and ROC-AUC on both Qwen models,
 sequentially. Repeat `--model` to compare other installed models.
 
-`gen` retries once by default. Use `--no-repair` for a first-pass-only run
-or `--repair` to enable retries in the benchmark. A truncated response
-triggers a fresh, compact generation. A validation failure triggers a
-JavaScript-only repair that preserves HTML and CSS. First attempts use
-4,096 context and 3,000 output tokens. Retries use 8,192 context and
-4,500 output tokens. A case that still fails exits nonzero after the
-results are saved. The first draft and preview remain available.
+`gen` runs a repair loop by default. It allows three follow-up calls and
+120 seconds of repair time. Repairs use the first failing check as feedback
+and may edit any activity file when needed. A stalled repair can escalate to
+thinking mode. Use `--escalation-model NAME` to try another installed model
+for escalation. The runner keeps every attempt and selects the strongest
+checked draft. Generation exits nonzero if no attempt passes all available
+checks.
+
+`views:eval` defaults to one generation per case. Both commands accept
+`--repair-policy none|once|loop`. The aliases `--no-repair` and `--repair`
+choose `none` and the legacy `once` policy.
+
+Replay failed first attempts from one or more saved runs:
+
+```sh
+mise run views:replay RUN_ID [RUN_ID ...]
+```
+
+Replay checks the saved draft once and gives both policies the same starting
+point. The arms run serially in randomized order, with a 120-second limit each.
+The run detail shows paired automated outcomes, time to pass, skipped inputs,
+and incomplete pairs. Fixture passes include behavior assertions. For custom
+briefs, review the interaction and teaching content before counting a draft as
+usable. Replay exits successfully after a comparison even if neither policy
+produces a passing draft. An empty replay or an infrastructure failure exits nonzero.
 
 Start the local dashboard with `mise run views:admin` and open
 the URL printed at startup. The default is http://127.0.0.1:8765. If that
 port is busy, the dashboard tries 8766 through 8774. Use
 `mise run views:admin --port 9001` to require a specific port. If the
 dashboard uses a different port, use that port in the evaluator's run link,
-the Claude Code MCP URL, and the JSON API examples below.
+the MCP URLs, and the JSON API examples below.
 The admin task uses uv to install its locked Python dependencies on first run.
 The dashboard groups runs alphabetically by prompt, with newer runs first
 within each prompt. Open a run to compare attempts, timings, screenshots, and diagnostics.
@@ -52,15 +70,92 @@ also assert numeric results and interactions. Review a draft's code, visuals,
 and teaching content before copying it into `src/views/<slug>/`. Add learning
 metadata and run `mise run views:check` and `mise run build` before publishing.
 
+## Activity libraries
+
+Local generation and the published site can bundle approved npm libraries
+into the activity iframe. D3 and Three.js are available today. Mention the
+library in the brief to include its tested reference in the prompt, for
+example:
+
+```sh
+mise run gen "Show a rotating cube with labeled axes. Use Three.js."
+```
+
+The generated `activity.js` uses a static package import and `view.yml`
+declares the package. Keep both when publishing a generated draft. For a
+hand-authored activity, add the same declaration:
+
+```yaml
+libraries: [three]
+```
+
+The build bundles the imports and inlines the result. An activity with
+`libraries` can use the standard host. The bundle supports static imports
+from the declared package entry points. Keep assets and data offline, and
+handle missing browser capabilities such as WebGL 2 in the activity.
+
+The model can return a library request instead of a draft:
+
+```json
+{"libraryRequest":{"package":"three","reason":"The activity needs interactive 3D rendering."}}
+```
+
+The CLI, admin attempt page, and run JSON show the requested package,
+reason, and availability. If the package is available, the default repair
+loop sends back its reference and asks for the full activity within the
+existing call and time budget. An unavailable package or incompatible
+version ends the run with an explicit dependency result. The runner never
+installs packages in response to model output.
+
+### Add a library
+
+1. Pick a browser-compatible npm package whose license permits bundling.
+   Pin a version with `npm install --save-dev --save-exact PACKAGE@VERSION`.
+   If it ships without type declarations, pin the corresponding compatible
+   `@types` package too. Commit `package.json` and `package-lock.json`.
+2. Register the npm package name in
+   [`scripts/activity-libraries.mjs`](../../scripts/activity-libraries.mjs).
+   Add a short description, prompt aliases, and any offline or browser
+   requirements. The registry reads the version from `package.json`.
+3. Add a small, strictly type-checked JavaScript example at
+   `scripts/activity-library-examples/PACKAGE.js`. Show the real static
+   import and a minimal working use with no external resources. The model
+   gets this code in its prompt when the package is named or requested.
+4. Add an offline browser case to
+   [`scripts/view-generation.test.mjs`](../../scripts/view-generation.test.mjs).
+   Run `node --test scripts/view-generation.test.mjs`,
+   `mise run views:check`, and `npm run build`. Try a short real generation
+   that names the library and inspect its preview, bundle check, and
+   generated `libraries` declaration.
+
 ## Query runs from a coding agent
 
-With the dashboard running, register its MCP server from the repo in Claude Code.
+From the repo root, start the dashboard with `mise run views:admin` and leave
+it running. Use the MCP endpoint printed at startup if it differs from the
+default shown below.
+
+### Codex CLI
+
+In a second terminal at the repo root, register the server and start Codex.
+
+```sh
+codex mcp add vizint-eval --url http://127.0.0.1:8765/mcp
+codex
+```
+
+In the Codex session, enter `/mcp` to check that `vizint-eval` is available.
+See the [Codex MCP guide](https://learn.chatgpt.com/docs/extend/mcp?surface=cli)
+for more configuration options.
+
+### Claude Code
+
+With the dashboard running, register the server from the repo root.
 
 ```sh
 claude mcp add --transport http vizint-eval http://127.0.0.1:8765/mcp
 ```
 
-Ask “Find the last five failed runs using model qwen3.5:4b. Inspect their
+In either agent, ask “Find the last five failed runs using model qwen3.5:4b. Inspect their
 attempts and supporting artifacts, then explain what went wrong and cite the
 run IDs.” The tools are `list_runs`, `get_run`, and `read_attempt_artifact`.
 

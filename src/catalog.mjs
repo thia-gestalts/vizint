@@ -1,9 +1,10 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { parse } from 'yaml';
+import { validateLibraries } from '../scripts/activity-libraries.mjs';
 
 export const app = 'example.thia.vizint';
 
-const fields = 'order activity title intro type frameHeight source sharedScript previewReady previewHash customHost media assets collapseExercises learning learningModule'.split(' ');
+const fields = 'order activity title intro type frameHeight source sharedScript libraries previewReady previewHash customHost media assets collapseExercises learning learningModule'.split(' ');
 const relations = 'topics teaches answers prerequisites practices assesses'.split(' ');
 const segment = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -57,6 +58,7 @@ export async function loadCatalog(root = new URL('views/', import.meta.url)) {
         if (field in data && typeof data[field] !== 'boolean') throw new Error(`Expected a boolean ${field}`);
       }
       if (data.customHost) requirePath('host.mjs');
+      if ('libraries' in data) validateLibraries(data.libraries);
       if ('assets' in data) {
         if (!segment.test(data.assets) || typeof data.assets !== 'string') throw new Error('Invalid assets directory');
         requirePath(data.assets + '/', true);

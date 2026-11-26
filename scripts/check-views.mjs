@@ -1,4 +1,5 @@
 import { activityProgram } from './activity-program.mjs';
+import { bundleActivity } from './activity-libraries.mjs';
 import { build } from 'esbuild';
 import { Script } from 'node:vm';
 import ts from 'typescript';
@@ -11,7 +12,7 @@ buildLearningGraph(entries, JSON.parse(readFileSync(new URL('../vendor/thia-gest
 
 const diagnostics = [];
 for (const entry of entries) {
-  if (entry.customHost) {
+  if (entry.customHost && !entry.libraries?.length) {
     const { outputFiles } = await build({
       entryPoints: [`src/views/${entry.slug}/activity.js`], bundle: true, format: 'iife', write: false,
     });
@@ -20,12 +21,15 @@ for (const entry of entries) {
   }
   const { parts, source } = await readActivityScript(entry);
   const filename = parts.at(-1).file;
-  const program = activityProgram(filename, source);
+  const program = activityProgram(filename, source, entry.libraries);
   if (program.getSyntacticDiagnostics().length === 0) {
     try {
-      new Script(source, { filename });
+      const code = entry.libraries?.length
+        ? await bundleActivity({ filename, source, libraries: entry.libraries })
+        : source;
+      new Script(code, { filename });
     } catch (error) {
-      console.error(`${entry.slug} view must run as a classic script. ${error.message}`);
+      console.error(`${entry.slug} activity script could not be loaded. ${error.message}`);
       process.exitCode = 1;
     }
   }
@@ -41,7 +45,7 @@ for (const entry of entries) {
     const part = inShared ? shared : activity;
     diagnostics.push({
       ...diagnostic,
-      file: ts.createSourceFile(part.file, part.source, options.target),
+      file: ts.createSourceFile(part.file, part.source, program.getCompilerOptions().target),
       start: inShared ? diagnostic.start : diagnostic.start - activityStart,
     });
   }

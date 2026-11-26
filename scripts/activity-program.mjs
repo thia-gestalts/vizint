@@ -1,4 +1,5 @@
 import ts from 'typescript';
+import { fileURLToPath } from 'node:url';
 
 const options = {
   allowJs: true,
@@ -10,12 +11,23 @@ const options = {
   types: [],
 };
 
-export function activityProgram(filename, source) {
-  const host = ts.createCompilerHost(options);
+export function activityProgram(filename, source, libraries = []) {
+  const settings = libraries.length ? {
+    ...options, module: ts.ModuleKind.ESNext, moduleResolution: ts.ModuleResolutionKind.Bundler,
+  } : options;
+  const host = ts.createCompilerHost(settings);
+  if (libraries.length) {
+    const anchor = fileURLToPath(new URL('../package.json', import.meta.url));
+    host.resolveModuleNames = (imports, containingFile) => imports.map(name => {
+      if (containingFile === filename && !libraries.includes(name)) return undefined;
+      const directoryAnchor = containingFile === filename ? anchor : containingFile;
+      return ts.resolveModuleName(name, directoryAnchor, settings, host).resolvedModule;
+    });
+  }
   const getSourceFile = host.getSourceFile;
   host.getSourceFile = (file, ...args) => file === filename
     ? ts.createSourceFile(file, source, options.target)
     : getSourceFile(file, ...args);
   // Each activity runs in its own frame with its own global scope.
-  return ts.createProgram([filename], options, host);
+  return ts.createProgram([filename], settings, host);
 }
