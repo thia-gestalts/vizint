@@ -1,0 +1,5 @@
+[project]
+name = "vizint-eval-admin"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = ["flask>=3.1,<4", "mcp>=1.26,<2", "starlette", "a2wsgi", "uvicorn"]

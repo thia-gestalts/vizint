@@ -2,8 +2,8 @@ import { parseArgs } from 'node:util';
 import { Script } from 'node:vm';
 import { createHash, randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { basename, join, resolve } from 'node:path';
 import { chromium } from 'playwright-core';
 import ts from 'typescript';
 import { stringify } from 'yaml';
@@ -216,45 +216,10 @@ async function attempt({ folder, model, brief, fixture, browser, reference, retr
   return { result, draft };
 }
 
-async function report(folder, rows) {
-  await writeFile(join(folder, 'results.json'), JSON.stringify(rows, null, 2));
-  const body = rows.map(({ model, name, attempts }) => `<tr><th>${escapeHTML(model)}</th>
-    <td>${escapeHTML(name)}</td>
-    ${[0, 1].map(index => {
-      const run = attempts[index];
-      if (!run) return '<td>—</td>';
-      const base = run.path;
-      const gpu = run.model?.bytes ? ` · ${Math.round(100 * run.model.vramBytes / run.model.bytes)}% of loaded bytes in VRAM` : '';
-      return `<td><strong class="${run.passed ? 'pass' : 'fail'}">${run.passed ? 'Pass' : 'Fail'}</strong>
-        · ${run.seconds}s${gpu}
-        <div>${run.strategy}${run.failure ? ` · ${run.failure}` : ''}</div>
-        ${run.options ? `<div>${run.outputTokens ?? '—'}/${run.options.num_predict} output tokens · ${run.options.num_ctx} context</div>` : ''}
-        ${run.checks ? `<div>Syntax ${run.checks.syntax} · Browser ${run.checks.browser} · ${run.checks.typeErrors ?? '—'} type errors</div>` : ''}
-        ${run.preview ? `<img src="${base}/preview.png" alt="Activity preview" loading="lazy">` : ''}
-        ${run.error ? `<details><summary>Diagnostics</summary><pre>${escapeHTML(run.error)}</pre></details>` : ''}
-        <a href="${base}/result.json">Result</a>
-        ${run.draft ? ` · <a download href="${base}/activity.html">HTML</a>
-          · <a download href="${base}/activity.css">CSS</a> · <a download href="${base}/activity.js">JS</a>
-          · <a download href="${base}/view.yml">Manifest</a>` : ''}
-        ${run.request ? ` · <a href="${base}/request.json">Request</a>` : ''}
-        ${run.response ? ` · <a href="${base}/response.json">Response</a>` : ''}</td>`;
-    }).join('')}</tr>`).join('');
-  await writeFile(join(folder, 'index.html'), `<!doctype html><html lang="en"><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' file:">
-<title>View generation results</title>
-<style>
-  body{font:15px system-ui;margin:2rem;color:#182237;background:#f7f8fb}
-  table{width:100%;border-collapse:collapse;background:white}
-  th,td{text-align:left;vertical-align:top;padding:1rem;border-bottom:1px solid #dbe1eb}
-  img{display:block;width:min(100%,320px);margin:.5rem 0;border:1px solid #dbe1eb}
-  pre{white-space:pre-wrap;overflow-wrap:anywhere;max-width:36rem}
-  .pass{color:#086646}.fail{color:#a72e25}
-</style>
-<h1>View generation results</h1>
-<p><a href="results.json">Results JSON</a> · <a href="run.json">Run settings</a></p>
-<table><thead><tr><th>Model</th><th>Fixture</th><th>First pass</th><th>Retry</th></tr></thead>
-<tbody>${body}</tbody></table></html>`);
+async function saveResults(folder, rows) {
+  const temporary = join(folder, 'results.json.tmp');
+  await writeFile(temporary, JSON.stringify(rows, null, 2));
+  await rename(temporary, join(folder, 'results.json'));
 }
 
 async function main() {
@@ -334,17 +299,20 @@ async function main() {
           draft: await exists('view.yml'), request: await exists('request.json'), response: await exists('response.json'),
         });
         if (result.error) console.log(result.error);
-        await report(folder, rows);
-        if (entry.reference) break;
-        if (result.failure === 'truncated') retry = { kind: 'retry-truncated' };
-        else if (result.failure === 'validation') retry = { kind: 'repair-code', draft, error: result.error };
-        else break;
+        if (!entry.reference && result.failure === 'truncated') retry = { kind: 'retry-truncated' };
+        else if (!entry.reference && result.failure === 'validation') {
+          retry = { kind: 'repair-code', draft, error: result.error };
+        } else retry = undefined;
+        row.finished = !(retry && retryEnabled && number === 1);
+        await saveResults(folder, rows);
+        if (row.finished) break;
       }
     }
   } finally {
     await browser.close();
   }
-  console.log(join(folder, 'index.html'));
+  const runId = basename(folder);
+  console.log(`Run ${runId}: http://127.0.0.1:8765/runs/${runId} (mise run views:admin)`);
   if (rows.some(row => !row.attempts.at(-1).passed)) process.exitCode = 1;
 }
 

@@ -25,16 +25,19 @@ triggers a fresh, compact generation. A validation failure triggers a
 JavaScript-only repair that preserves HTML and CSS. First attempts use
 4,096 context and 3,000 output tokens. Retries use 8,192 context and
 4,500 output tokens. A case that still fails exits nonzero after the
-report is written. The first draft and preview remain available.
+results are saved. The first draft and preview remain available.
 
-Open the printed `index.html` to compare passes, timings, screenshots, and
-diagnostics. Each run lives under the gitignored `.view-generation/` folder
+Start the local dashboard with `mise run views:admin` and open
+http://127.0.0.1:8765 or follow the run link printed by the evaluator.
+The admin task uses uv to install its locked Python dependencies on first run.
+Use the dashboard to compare attempts, timings, screenshots, and diagnostics.
+Each run lives under the gitignored `.view-generation/` folder
 with requests, responses, draft files, and JSON results. Use `run.json`
 to compare the Git commit, working-tree dirty flag, runner fingerprint,
 runtime versions, prompts, and retry settings. A dirty run's fingerprint
 identifies the runner and fixture contents used at the time.
 Per-attempt results record the strategy, failure stage, token
-budget and usage, and syntax, type, and browser outcomes. The report displays
+budget and usage, and syntax, type, and browser outcomes. The dashboard displays
 the share of Ollama's loaded model bytes in VRAM when available. Use
 `ollama ps` to confirm CPU/GPU placement on the 8 GB NVIDIA card.
 
@@ -43,3 +46,27 @@ context. Custom briefs get script and browser smoke checks. Benchmark fixtures
 also assert numeric results and interactions. Review a draft's code, visuals,
 and teaching content before copying it into `src/views/<slug>/`. Add learning
 metadata and run `mise run views:check` and `mise run build` before publishing.
+
+## Query runs from a coding agent
+
+With the dashboard running, register its MCP server from the repo in Claude Code.
+
+```sh
+claude mcp add --transport http vizint-eval http://127.0.0.1:8765/mcp
+```
+
+Ask “Find the last five failed runs using model qwen3.5:4b. Inspect their
+attempts and supporting artifacts, then explain what went wrong and cite the
+run IDs.” The tools are `list_runs`, `get_run`, and `read_attempt_artifact`.
+
+The equivalent run search over JSON is:
+
+```sh
+curl -G http://127.0.0.1:8765/api/runs \
+  --data-urlencode 'model=qwen3.5:4b' \
+  --data 'status=failed' --data 'limit=5'
+```
+
+Open each returned `api_url` for settings, diagnostics, and artifact URLs.
+A failed run has at least one matching fixture whose final attempt failed.
+Each run folder appears once, even if several fixtures failed.

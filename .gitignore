@@ -2,3 +2,6 @@
 /node_modules/
 /.learning-cache/
 /.view-generation/
+
+/scripts/eval-admin/.venv/
+/scripts/eval-admin/__pycache__/
