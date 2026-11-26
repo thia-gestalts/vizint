@@ -1,6 +1,8 @@
 @import "tailwindcss" source(none);
 @source "../scripts/build.mjs";
+@source "../scripts/learning-pages.mjs";
 @source "./shared/account.mjs";
+@source "./shared/search.mjs";
 
 @plugin "daisyui" {
   themes: corporate --default;

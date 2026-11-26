@@ -19,15 +19,15 @@ def validate(records):
             raise ValueError(f"Pinned schema changed: {relative_path}")
         schema = json.loads(contents)
         Draft202012Validator.check_schema(schema)
-        schemas[Path(relative_path).parent.name] = schema
+        schemas[relative_path] = schema
 
     registry = Registry().with_resources(
         (schema["$id"], Resource.from_contents(schema)) for schema in schemas.values()
     )
     validators = {
-        kind: Draft202012Validator(schema, registry=registry)
-        for kind, schema in schemas.items()
-        if kind != "common"
+        Path(path).parent.name: Draft202012Validator(schema, registry=registry)
+        for path, schema in schemas.items()
+        if Path(path).parent.name != "common"
     }
     if not isinstance(records, list):
         raise ValueError("Expected a JSON array of records")

@@ -27,7 +27,7 @@ async function persist() {
   saving = true;
   retry.hidden = true;
   try {
-    await saveObservation(observation, [entry.target]);
+    await saveObservation(observation, entry.targets);
     saved = true;
     if (question) send({ type: 'saved', id: question.id });
   } catch {
@@ -38,14 +38,13 @@ async function persist() {
 }
 
 function observe(score) {
-  const { kind, id } = entry.target;
   observation = {
     kind: 'learning-event',
     id: crypto.randomUUID(),
     type: entry.type,
     occurredAtMs: Date.now(),
     origin: { app, activity: entry.activity },
-    targets: [{ kind, id }],
+    targets: entry.targets.map(({ kind, id }) => ({ kind, id })),
   };
   if (entry.type === 'attempt') observation.score = score;
   void persist();
@@ -74,7 +73,6 @@ window.addEventListener('message', ({ source, origin, data }) => {
     question = newQuestion(question.value);
     observation = undefined;
     saved = false;
-    status.textContent = '';
     showQuestion();
   }
 });

@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { app, entries } from '../src/catalog.mjs';
 import { readActivityScript } from './activity-script.mjs';
+import { buildLearningGraph, exerciseAnchor } from './learning-graph.mjs';
+import { activityLearning, escapeHTML, writeLearningPages } from './learning-pages.mjs';
 
 const root = new URL('../', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
@@ -18,10 +20,7 @@ for (const [path, expected] of Object.entries(pin.sha256)) {
   }
 }
 
-function escapeHTML(text) {
-  return text.replaceAll('&', '&amp;').replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;').replaceAll('"', '&quot;');
-}
+const graph = buildLearningGraph(entries, JSON.parse(await read(vendor + 'common/v2.json')));
 
 function icon(name) {
   const svg = readFileSync(new URL(`icons/${name}.svg`, lucide), 'utf8');
@@ -103,11 +102,13 @@ await rm(output, { recursive: true, force: true });
 await mkdir(output);
 await import('./olymp.mjs');
 await cp(new URL('src/shared/', root), output, { recursive: true });
-await cp(new URL('src/catalog.mjs', root), new URL('catalog.mjs', output));
+await writeFile(new URL('catalog.mjs', output),
+  `export const app = ${JSON.stringify(app)};\nexport const entries = ${JSON.stringify(graph.eventEntries)};\n`);
 await cp(new URL(vendor, root), new URL('schemas/', output), { recursive: true });
 await cp(new URL('LICENSE', lucide), new URL('lucide-license.txt', output));
 await writeFile(new URL('index.html', output), page('Vizint', '', `
   <h1 class="text-3xl font-semibold tracking-tight sm:text-5xl">Explore and practice</h1>
+  <a class="btn btn-outline mt-4" href="./learn/">${icon('search')} Find learning material</a>
   <div class="mt-6 grid gap-4 sm:mt-8 sm:grid-cols-2">${entries.map(({ slug, title, intro, type }) => `
     <article class="card relative rounded-xl border border-base-300 bg-base-100 transition-colors hover:border-primary focus-within:border-primary">
       <div class="card-body gap-3">
@@ -121,8 +122,13 @@ await writeFile(new URL('index.html', output), page('Vizint', '', `
     </article>`).join('')}
   </div>`));
 
+await writeLearningPages({ output, page, entries, graph });
+
 for (const entry of entries) {
-  const { slug, title, intro, source, frameHeight } = entry;
+  const { slug, activity, title, intro, source, frameHeight, learning, type } = entry;
+  const exercises = learning?.exercises ?? [];
+  const activeExercise = type === 'attempt' ? exercises[0] : undefined;
+  const links = graph.byActivity.get(activity);
   const markup = await read(`src/${slug}/activity.html`);
   const { source: code } = await readActivityScript(entry);
   const styles = await read(`src/${slug}/activity.css`);
@@ -136,14 +142,29 @@ for (const entry of entries) {
   const path = new URL(`${slug}/`, output);
   await mkdir(path);
   await writeFile(new URL('index.html', path), page(`${title} | Vizint`, '../', `
-    <a class="btn btn-ghost btn-sm -ml-2" href="../">${icon('arrow-left')} All activities</a>
+    <div class="flex flex-wrap items-center gap-2">
+      <a class="btn btn-ghost btn-sm -ml-2" href="../">${icon('arrow-left')} All activities</a>
+      <a class="link link-hover link-primary text-sm" href="../learn/">Find learning material</a>
+    </div>
     <h1 class="mt-3 text-3xl leading-tight font-semibold tracking-tight sm:text-5xl">${escapeHTML(title)}</h1>
     <p class="mt-3 max-w-prose leading-relaxed text-base-content/75">${escapeHTML(intro)}</p>
     <template id="activity-template"><iframe class="block w-full rounded-xl border border-base-300 bg-base-100" style="height: ${escapeHTML(frameHeight)}" title="${escapeHTML(title)}" sandbox="allow-scripts" srcdoc="${escapeHTML(frame)}"></iframe></template>
-    <div id="activity" class="mt-6" data-entry="${slug}"></div>
+    <div class="mt-6"${activeExercise ? ` id="${exerciseAnchor(activeExercise)}"` : ''}>
+      <div id="activity" data-entry="${slug}"></div>
+    </div>
     <noscript><p class="alert alert-info">Enable JavaScript to use this activity.</p></noscript>
     <p id="save-status" class="text-sm text-base-content/75 not-empty:mt-3" role="status"></p>
     <button class="btn btn-outline btn-sm mt-2" type="button" id="retry" hidden>${icon('rotate-ccw')} Retry saving</button>
+    ${activityLearning(links)}
+    ${exercises.map((exercise) => {
+      const details = activityLearning(links, exercise);
+      if (!details) return '';
+      const anchor = exercise === activeExercise ? '' : ` id="${exerciseAnchor(exercise)}"`;
+      return `<section${anchor} class="mt-8">
+        <h2 class="text-lg font-semibold">${escapeHTML(exercise.title)}</h2>
+        ${details}
+      </section>`;
+    }).join('')}
     ${source ? `<footer class="mt-5 text-sm text-base-content/75">${escapeHTML(source)}</footer>` : ''}`, '<script type="module" src="../host.mjs"></script>'));
 }
 

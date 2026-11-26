@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://thia.example/gestalts/question/v1.json",
+  "title": "Question",
+  "description": "A research or learner question.",
+  "$ref": "../common/v2.json#/$defs/recordIdentity",
+  "required": ["text"],
+  "properties": {
+    "kind": { "const": "question" },
+    "text": { "type": "string", "minLength": 1 },
+    "openedBy": {
+      "description": "Artifacts or observed activity occurrences that opened the question.",
+      "$ref": "#/$defs/sources"
+    },
+    "answeredBy": {
+      "description": "Artifacts or observed activity occurrences that answered the question.",
+      "$ref": "#/$defs/sources"
+    }
+  },
+  "$defs": {
+    "sources": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "../common/v2.json#/$defs/recordReference",
+        "properties": { "kind": { "enum": ["artifact", "learning-event"] } }
+      }
+    }
+  },
+  "unevaluatedProperties": false
+}

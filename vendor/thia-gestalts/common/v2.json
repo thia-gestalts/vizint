@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://thia.example/gestalts/common/v2.json",
+  "title": "Shared Gestalt definitions",
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "description": "Lowercase, hyphenated UUIDv4.",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}(?![\\s\\S])"
+    },
+    "nameId": {
+      "type": "string",
+      "description": "The prefix name: followed by the lowercase UTF-8 hex encoding of the normalized name. See core.md for the identity algorithm.",
+      "pattern": "^name:(?:[0-9a-f]{2})+(?![\\s\\S])",
+      "examples": ["name:62657a696572"]
+    },
+    "namespace": {
+      "type": "string",
+      "description": "Publisher or app namespace based on a reversed DNS name under its control.",
+      "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+(?![\\s\\S])",
+      "maxLength": 253,
+      "examples": ["org.example.math"]
+    },
+    "learningTargetId": {
+      "description": "A UUIDv4 for a personal target or an immutable publisher key for a published target.",
+      "oneOf": [
+        { "$ref": "#/$defs/uuid" },
+        {
+          "type": "string",
+          "pattern": "^key:(?=[a-z0-9.-]{1,253}:)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+:[a-z0-9]+(?:-[a-z0-9]+)*(?:/[a-z0-9]+(?:-[a-z0-9]+)*)*(?![\\s\\S])",
+          "examples": ["key:org.example.math:rounding/nearest-ten"]
+        }
+      ]
+    },
+    "recordIdentity": {
+      "type": "object",
+      "description": "Compare the pair (kind, id) for record identity. Schema revisions are excluded.",
+      "required": ["kind", "id"],
+      "properties": {
+        "kind": { "enum": ["note", "topic", "artifact", "fact", "skill", "learning-event", "annotation", "question", "entity", "claim", "flashcard", "task"] },
+        "id": { "type": "string" }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "kind": { "enum": ["topic", "artifact"] },
+            "id": { "$ref": "#/$defs/nameId" }
+          }
+        },
+        {
+          "properties": {
+            "kind": { "enum": ["fact", "skill"] },
+            "id": { "$ref": "#/$defs/learningTargetId" }
+          }
+        },
+        {
+          "properties": {
+            "kind": { "enum": ["note", "learning-event", "annotation", "question", "entity", "claim", "flashcard", "task"] },
+            "id": { "$ref": "#/$defs/uuid" }
+          }
+        }
+      ]
+    },
+    "recordReference": {
+      "$ref": "#/$defs/recordIdentity",
+      "description": "A typed reference resolved by the pair (kind, id) in the consumer's records.",
+      "unevaluatedProperties": false,
+      "examples": [{ "kind": "skill", "id": "key:org.example.math:rounding/nearest-ten" }]
+    },
+    "displayName": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Original display spelling. For topics and artifacts, the normalized name must be nonempty and derive the record's id."
+    },
+    "imageReference": {
+      "type": "object",
+      "description": "A reference to image bytes in attachment storage owned by the apps.",
+      "required": ["id", "mediaType"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/uuid",
+          "description": "Stable attachment UUID, resolved in the app's attachment storage."
+        },
+        "mediaType": {
+          "type": "string",
+          "description": "Lowercase image media type without parameters.",
+          "pattern": "^image/[a-z0-9][a-z0-9!#$&^_.+-]*(?![\\s\\S])",
+          "examples": ["image/png"]
+        }
+      }
+    }
+  }
+}
