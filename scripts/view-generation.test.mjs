@@ -59,6 +59,12 @@ test('fenced replies parse into drafts or library requests', () => {
   assert.equal(parseFenced('```html\n<p></p>\n```\n```javascript\nlet a = `x`;\n```').code, 'let a = `x`;');
   assert.throws(() => parseFenced('no blocks here'), /fenced code blocks/);
   assert.throws(() => parseFenced('```json\n{oops\n```'), /not valid JSON/);
+  const header = JSON.stringify({ title: draft.title, intro: draft.intro, libraries: [] });
+  const body = '```html\n<p></p>\n```\n```css\np {}\n```\n```js\nlet a = 1;\n```';
+  assert.equal(parseFenced('```json\n' + header + ',\n```\n' + body).title, draft.title);
+  const glued = parseFenced('```json\n' + header + '```html\n<p></p>\n```\n```js\nlet a = 1;\n```');
+  assert.equal(glued.title, draft.title);
+  assert.equal(glued.markup, '<p></p>');
 });
 
 test('run specs are validated and normalized', () => {

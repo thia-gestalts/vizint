@@ -15,7 +15,7 @@ import { readActivityScript } from './activity-script.mjs';
 import { escapeHTML } from './learning-pages.mjs';
 import { fixtures } from './view-generation-fixtures.mjs';
 import { exampleModes, selectExample } from './view-examples.mjs';
-import { activityLibraries, bundleActivity, libraryCatalog, libraryNamesInBrief, libraryReferences, libraryVersion, validateLibraries }
+import { activityLibraries, bundleActivity, libraryCatalog, libraryNamesInBrief, libraryReferences, libraryVersion, normalizeLibraryNames, validateLibraries }
   from './activity-libraries.mjs';
 import { accepted, nextRepair, preferredCandidate, regressions, repairBudgetMs, repairCallLimit, repairPolicies, tierOf, tiers }
   from './view-repair-policy.mjs';
@@ -216,7 +216,10 @@ Use the supplied reference and write the complete activity. Include the package 
 
 /** Parse a fenced reply: a json header block, then html, css and js blocks. */
 export function parseFenced(content) {
-  const blocks = [...String(content).matchAll(/^```[ \t]*([\w+-]*)[^\n]*\n([\s\S]*?)^```[ \t]*$/gm)]
+  // Small models glue fences onto the previous line: "}```" closes a block, "}```html" also opens the next.
+  const text = String(content).replace(/([^\s`])[ \t]*```([\w+-]+)?/g,
+    (_, last, language) => `${last}\n\`\`\`` + (language ? `\n\`\`\`${language}` : ''));
+  const blocks = [...text.matchAll(/^```[ \t]*([\w+-]*)[^\n]*\n([\s\S]*?)^```[ \t]*$/gm)]
     .map(([, language, body]) => ({ language: language.toLowerCase(), body: body.replace(/\n$/, '') }));
   if (!blocks.length) throw new Error('Expected fenced code blocks');
   const header = blocks.find(block => block.language === 'json');
@@ -225,7 +228,14 @@ export function parseFenced(content) {
     try {
       meta = JSON.parse(header.body);
     } catch {
-      throw new Error('The json header block is not valid JSON');
+      // Tolerate stray text around the object, such as a trailing comma.
+      const start = header.body.indexOf('{'), end = header.body.lastIndexOf('}');
+      try {
+        if (start < 0 || end < start) throw new Error();
+        meta = JSON.parse(header.body.slice(start, end + 1));
+      } catch {
+        throw new Error('The json header block is not valid JSON');
+      }
     }
   }
   if (meta && typeof meta === 'object' && Object.hasOwn(meta, 'libraryRequest')) return meta;
@@ -242,8 +252,12 @@ function parseDraft(draft) {
       typeof (draft.styles ?? '') !== 'string') {
     throw new Error('Expected a nonempty title, intro, html and js');
   }
-  const libraries = draft.libraries ?? [];
+  const libraries = normalizeLibraryNames(draft.libraries ?? []);
   validateLibraries(libraries);
+  // Declare supported packages the code imports but the header forgot.
+  for (const [, name] of draft.code.matchAll(/^\s*import\b[^'"]*['"]([^'"]+)['"]/gm)) {
+    if (Object.hasOwn(activityLibraries, name) && !libraries.includes(name)) libraries.push(name);
+  }
   return { title: draft.title, intro: draft.intro, markup: draft.markup, styles: draft.styles ?? '', code: draft.code, libraries };
 }
 
@@ -558,6 +572,7 @@ const usage = `Usage:
   node scripts/view-generation.mjs describe
 Arm options: --examples ${exampleModes.join('|')} --samples 1-${limits.samples} --temperature 0-${limits.temperature}
              --repair ${repairPolicies.join('|')} --format ${formats.join('|')}
+generate defaults to --examples retrieved --repair loop; eval and run use the arm defaults.
 Add --hypothesis TEXT to label a run. Fixtures: ${Object.keys(fixtures).join(', ')}.`;
 
 async function main() {
@@ -605,7 +620,7 @@ async function main() {
     const number = value => value === undefined ? undefined : Number(value);
     const arm = model => Object.fromEntries(Object.entries({
       model, examples: values.examples ?? (generating ? 'retrieved' : undefined), samples: number(values.samples),
-      temperature: number(values.temperature), repair: values.repair, format: values.format,
+      temperature: number(values.temperature), repair: values.repair ?? (generating ? 'loop' : undefined), format: values.format,
     }).filter(([, value]) => value !== undefined));
     input = {
       hypothesis: values.hypothesis ?? (generating ? 'Generate a draft for a custom brief' : 'Fixture evaluation'),
