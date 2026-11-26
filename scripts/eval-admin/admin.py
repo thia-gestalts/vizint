@@ -141,6 +141,54 @@ def read_attempt_artifact(run_id: str, attempt: str, name: str, offset: int = 0)
     return {"text": excerpt[:8000], "next_offset": offset + 8000 if len(excerpt) > 8000 else None}
 
 
+def case_prompt(folder, settings, case):
+    for planned in settings.get("cases", []):
+        if (isinstance(planned, dict) and planned.get("model") == case.get("model")
+                and planned.get("fixture") == case.get("name")):
+            brief = planned.get("brief")
+            if isinstance(brief, str) and brief.strip():
+                return brief
+
+    attempts = case.get("attempts", [])
+    if attempts:
+        try:
+            path = artifact_path(folder, attempts[0]["path"], "request.json")
+        except FileNotFoundError:
+            pass
+        else:
+            for message in read_json(path, {}).get("messages", []):
+                if isinstance(message, dict) and message.get("role") == "user":
+                    content = message.get("content")
+                    if isinstance(content, str) and content.strip():
+                        return content
+    return None
+
+
+def prompt_groups(runs, model=None):
+    groups = {}
+    for summary in runs:
+        try:
+            folder = run_folder(summary["id"])
+        except FileNotFoundError:
+            continue
+        run = read_run(folder, include_artifacts=False)
+        matching = {(case["model"], case["name"], case["status"]) for case in summary["cases"]}
+        cases = [case for case in run["cases"]
+                 if (case.get("model"), case.get("name"), case["status"]) in matching]
+        if not cases and not run["cases"]:
+            cases = [
+                {"model": planned.get("model"), "name": planned.get("fixture"), "status": "pending"}
+                for planned in run["settings"].get("cases", [])
+                if isinstance(planned, dict) and (model is None or planned.get("model") == model)
+            ]
+        prompts = {}
+        for case in cases:
+            prompts.setdefault(case_prompt(folder, run["settings"], case), []).append(case)
+        for prompt, prompt_cases in (prompts or {None: []}).items():
+            groups.setdefault(prompt, []).append({**summary, "cases": prompt_cases})
+    return sorted(groups.items(), key=lambda item: (item[0] is None, (item[0] or "").casefold()))
+
+
 @flask.get("/")
 def dashboard():
     model = request.args.get("model") or None
@@ -149,7 +197,7 @@ def dashboard():
         runs = list_runs(model, status, 100)["runs"]
     except ValueError as error:
         abort(400, str(error))
-    return render_template("index.html", runs=runs, model=model, status=status)
+    return render_template("index.html", groups=prompt_groups(runs, model), model=model, status=status)
 
 
 @flask.get("/runs/<run_id>")
@@ -158,6 +206,8 @@ def detail(run_id):
         run = get_run(run_id)
     except FileNotFoundError:
         abort(404)
+    for case in run["cases"]:
+        case["prompt"] = case_prompt(run_folder(run_id), run["settings"], case)
     return render_template("detail.html", run=run)
 
 

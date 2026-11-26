@@ -34,7 +34,8 @@ port is busy, the dashboard tries 8766 through 8774. Use
 dashboard uses a different port, use that port in the evaluator's run link,
 the Claude Code MCP URL, and the JSON API examples below.
 The admin task uses uv to install its locked Python dependencies on first run.
-Use the dashboard to compare attempts, timings, screenshots, and diagnostics.
+The dashboard groups runs alphabetically by prompt, with newer runs first
+within each prompt. Open a run to compare attempts, timings, screenshots, and diagnostics.
 Each run lives under the gitignored `.view-generation/` folder
 with requests, responses, draft files, and JSON results. Use `run.json`
 to compare the Git commit, working-tree dirty flag, runner fingerprint,

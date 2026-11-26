@@ -14,10 +14,13 @@
   </label>
   <button class="rounded bg-indigo-700 px-4 py-2 font-medium text-white">Filter</button>
 </form>
+{% for prompt, runs in groups %}
+<section class="space-y-3">
+  <h2 class="whitespace-pre-wrap break-words text-xl font-semibold">{{ prompt or 'Runs without a recorded prompt' }}</h2>
 <ul class="divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white">
   {% for run in runs %}
   <li class="space-y-2 p-4">
-    <a class="font-semibold text-indigo-700 hover:underline" href="{{ run.url }}">{{ run.id }}</a>
+    <a class="break-all text-sm text-indigo-700 hover:underline" href="{{ run.url }}">{{ run.id }}</a>
     {% if run.settings.command %}<span class="ml-2 text-sm text-slate-600">{{ run.settings.command }}</span>{% endif %}
     <ul class="flex flex-wrap gap-2 text-sm">
       {% for case in run.cases %}
@@ -27,8 +30,10 @@
       {% endfor %}
     </ul>
   </li>
-  {% else %}
-  <li class="p-4 text-slate-600">No matching runs.</li>
   {% endfor %}
 </ul>
+</section>
+{% else %}
+<p class="text-slate-600">No matching runs.</p>
+{% endfor %}
 {% endblock %}
