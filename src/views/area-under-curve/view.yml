@@ -1,0 +1,25 @@
+title: Area under the curve
+intro: Move the right edge of the shaded region under y = x². Add more rectangles
+  to see how their combined area approaches the area under the curve.
+type: engagement
+frameHeight: 24rem
+previewReady: "#area[d]"
+patterns: [svg-plot, range-slider, live-readout]
+learning:
+  records:
+    - kind: topic
+      name: Definite Integrals
+    - kind: fact
+      key: definite-integrals/rectangle-approximation
+      statement: For a continuous curve above the x-axis, the combined area of
+        equal-width rectangles approaches the area under the curve as the
+        rectangles get narrower.
+  topicLinks:
+    - subject: {kind: topic, name: Definite Integrals}
+      relation: within
+      object: {kind: topic, name: Mathematics}
+  topics:
+    - target: {kind: topic, name: Definite Integrals}
+      weight: 1
+  teaches:
+    - target: {kind: fact, key: definite-integrals/rectangle-approximation}

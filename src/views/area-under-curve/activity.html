@@ -1,0 +1,53 @@
+<main>
+  <svg viewBox="0 0 420 288" role="img" aria-labelledby="plot-title plot-description">
+    <title id="plot-title">Area under y = x²</title>
+    <desc id="plot-description">The filled region extends from zero to the selected
+      right edge. The outlined rectangles start at the x-axis and reach the curve
+      at their left edges.</desc>
+    <g aria-hidden="true">
+      <path class="grid" d="M44 36H384 M44 88H384 M44 140H384 M44 192H384 M129 36V244 M214 36V244 M299 36V244 M384 36V244"/>
+      <path id="area"/>
+      <path id="rectangles"/>
+      <path class="axis" d="M44 30V244H397"/>
+      <path id="curve"/>
+      <circle id="endpoint" r="4"/>
+      <g class="y-ticks">
+        <text x="34" y="36">16</text>
+        <text x="34" y="88">12</text>
+        <text x="34" y="140">8</text>
+        <text x="34" y="192">4</text>
+      </g>
+      <g class="x-ticks">
+        <text x="44" y="266">0</text>
+        <text x="129" y="266">1</text>
+        <text x="214" y="266">2</text>
+        <text x="299" y="266">3</text>
+        <text x="384" y="266">4</text>
+      </g>
+      <text class="axis-label" x="38" y="20">y</text>
+      <text class="axis-label" x="402" y="248">x</text>
+      <text class="curve-label" x="308" y="28">y = x²</text>
+    </g>
+  </svg>
+
+  <section class="controls" aria-label="Area controls">
+    <label for="limit">Right edge <span id="limit-value" aria-hidden="true"></span></label>
+    <input id="limit" type="range" min="0" max="4" step="0.25" value="3.5">
+
+    <label for="count">Rectangles <span id="count-value" aria-hidden="true"></span></label>
+    <input id="count" type="range" min="1" max="32" step="1" value="5">
+
+    <dl class="readouts">
+      <div class="exact">
+        <dt>Area under the curve</dt>
+        <dd><output id="exact-area" for="limit"></output></dd>
+      </div>
+      <div class="estimate">
+        <dt>Left rectangle estimate</dt>
+        <dd><output id="estimated-area" for="limit count"></output></dd>
+      </div>
+    </dl>
+    <p class="note">Each rectangle uses the curve’s height at its left edge.
+      Add rectangles to make the gaps smaller.</p>
+  </section>
+</main>

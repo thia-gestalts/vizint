@@ -1,0 +1,75 @@
+main {
+  --accent: #3947a5;
+  --area: #ccd5ff;
+  --rectangle: #00736a;
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  align-items: center;
+  gap: clamp(1rem, 3vw, 1.5rem);
+  max-width: 46rem;
+  margin: auto;
+}
+
+svg {
+  display: block;
+  width: 100%;
+  border-radius: .75rem;
+  background: #f5f7ff;
+  color: #41506c;
+  font-size: 15px;
+}
+
+svg text { fill: currentColor; }
+svg path { vector-effect: non-scaling-stroke; }
+.grid { fill: none; stroke: #dce2f1; }
+.axis { fill: none; stroke: #67758d; }
+.y-ticks { text-anchor: end; dominant-baseline: middle; }
+.x-ticks { text-anchor: middle; }
+.axis-label { font-style: italic; }
+.curve-label { fill: var(--accent); font-weight: 650; }
+#area { fill: var(--area); }
+#rectangles { fill: #e6f7f7; stroke: var(--rectangle); }
+#curve { fill: none; stroke: var(--accent); stroke-width: 2.5; }
+#endpoint { fill: var(--accent); stroke: #fff; stroke-width: 1.5; }
+
+.controls { min-width: 0; }
+.controls label, .readouts > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: .65rem;
+}
+.controls label { font-size: .9375rem; font-weight: 650; }
+.controls label span, .readouts dd { font-variant-numeric: tabular-nums; }
+.controls input {
+  display: block;
+  width: 100%;
+  margin: .25rem 0 .85rem;
+  accent-color: var(--accent);
+}
+.readouts {
+  display: grid;
+  gap: .4rem;
+  margin: 1rem 0 0;
+  padding-top: .65rem;
+  border-top: 1px solid #dce2f1;
+  font-size: .875rem;
+}
+.readouts dt::before {
+  display: inline-block;
+  width: .65rem;
+  height: .65rem;
+  margin-right: .45rem;
+  border-radius: .13rem;
+  content: "";
+}
+.exact dt::before { background: var(--area); }
+.estimate dt::before { border: 1px solid var(--rectangle); background: #e6f7f7; }
+.readouts dd { margin: 0; font-size: 1rem; font-weight: 700; }
+.exact dd { color: var(--accent); }
+.estimate dd { color: var(--rectangle); }
+.note { margin: .65rem 0 0; color: #41506c; font-size: .875rem; }
+
+@media (max-width: 38rem) {
+  main { grid-template-columns: 1fr; max-width: 26rem; }
+}
