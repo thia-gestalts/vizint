@@ -1,0 +1,32 @@
+<div id="formula" aria-live="polite"></div>
+<svg id="plot" viewBox="0 0 640 290" role="group" aria-label="Predicted recall probability over 30 days with reviews">
+  <g aria-hidden="true">
+    <g id="grid"></g>
+    <rect id="hit" class="hit" x="56" y="16" width="564" height="230"/>
+    <path id="fill" class="fill"/>
+    <path id="jumps" class="jumps"/>
+    <path id="curve" class="curve"/>
+    <path id="guides" class="guides"/>
+    <text class="axis-label" x="338" y="286">Days</text>
+    <text class="axis-label" transform="translate(14 131) rotate(-90)">Predicted recall (p̂)</text>
+  </g>
+  <g id="reviews"></g>
+  <g class="handle now" id="now-handle" tabindex="0" role="slider" aria-label="Moment to inspect, in days"
+     aria-valuemin="0" aria-valuemax="30">
+    <circle r="9"/>
+    <text y="-16">t</text>
+  </g>
+</svg>
+<p class="hint">Click the plot to add a review. Click a review to switch ✓ / ✗, drag it to move, drag it below the plot to delete.</p>
+<div class="buttons">
+  <button type="button" id="review-correct" class="correct">✓ Review at t, recalled</button>
+  <button type="button" id="review-incorrect" class="incorrect">✗ Review at t, forgotten</button>
+</div>
+<div class="controls">
+  <label class="bias" for="bias">θ<sub>b</sub>, bias <output id="bias-value" for="bias"></output></label>
+  <input id="bias" class="bias" type="range" min="-2" max="3" step="0.1" value="0">
+  <label class="correct" for="theta-correct">θ<sub>⊕</sub>, per correct recall <output id="theta-correct-value" for="theta-correct"></output></label>
+  <input id="theta-correct" class="correct" type="range" min="0" max="2" step="0.1" value="1">
+  <label class="incorrect" for="theta-incorrect">θ<sub>⊖</sub>, per lapse <output id="theta-incorrect-value" for="theta-incorrect"></output></label>
+  <input id="theta-incorrect" class="incorrect" type="range" min="-2" max="1" step="0.1" value="-1">
+</div>

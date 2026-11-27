@@ -1,0 +1,53 @@
+order: 71
+activity: half-life-regression-shark-fins
+frameHeight: calc(clamp(0px, 45vw - 1rem, 22rem) + 20rem)
+libraries: [katex]
+previewReady: "#formula .katex"
+title: Shark fins of spaced repetition
+intro: Every review resets recall to 1 and sets a new half-life from your
+  history so far. Add reviews, mark them recalled or forgotten, and tune the
+  weights Θ to see each forgetting curve grow a longer, flatter fin.
+type: engagement
+patterns: [svg-plot, drag-handles, keyboard-handles, range-slider, live-formula, click-to-add]
+source: Half-life regression from Settles and Meeder, “A Trainable Spaced
+  Repetition Model for Language Learning” (ACL 2016), with the Leitner weights
+  θ⊕ = 1, θ⊖ = −1 as the starting point.
+learning:
+  records:
+    - kind: topic
+      name: Spaced Repetition
+    - kind: question
+      id: 0d9b7f62-5a43-4c1e-9b8a-3f6e2c1d7a54
+      text: Why does a memory fade more slowly after each successful review?
+  topicLinks:
+    - subject:
+        kind: topic
+        name: spaced repetition
+      relation: within
+      object:
+        kind: topic
+        name: memory
+    - subject:
+        kind: topic
+        name: spaced repetition
+      relation: related
+      object:
+        kind: topic
+        name: forgetting curve
+  topics:
+    - target:
+        kind: topic
+        name: spaced repetition
+      weight: 1
+    - target:
+        kind: topic
+        name: forgetting curve
+      weight: 0.7
+  teaches:
+    - target:
+        kind: fact
+        key: spaced-repetition/half-life-regression
+  answers:
+    - target:
+        kind: question
+        id: 0d9b7f62-5a43-4c1e-9b8a-3f6e2c1d7a54
