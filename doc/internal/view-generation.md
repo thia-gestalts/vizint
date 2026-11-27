@@ -165,15 +165,29 @@ codex mcp add vizint-eval --url http://127.0.0.1:8765/mcp
 | `list_runs`, `get_run` | headlines, scoreboard, samples, notes, provenance |
 | `get_sample`, `read_attempt_artifact` | attempts, diagnostics and draft files |
 | `add_note`, `cancel_run` | write a conclusion, stop the active run |
+| `query_authoring` | everyday authoring turns, filtered and grouped by up to two of client, model, effort, workspace, change, tool, prompt or instruction fingerprint, view, check status, contract, day or week |
+| `authoring_failures` | check diagnostics clustered into recurring patterns, with the views, clients and models they affect |
+| `get_authoring_view` | one view's status sequence, first passing turn and the effort until then, commits, notes and timeline |
+| `get_authoring_turn` | one turn's tool calls, usage, instructions, views read and revision checks |
+| `read_authoring_transcript` | a turn's conversation, condensed from the client's own transcript |
+| `read_authoring_check_file` | the captured sources and checker output of a checked revision |
+| `add_authoring_note` | a finding on a view's Authoring page |
 
 For example, ask: “Start a run comparing retrieved and no examples on all
 fixtures with qwen3.5:4b. When it finishes, inspect the broken samples and
-add a note with your conclusion and the next experiment.”
+add a note with your conclusion and the next experiment.” Or: “Which
+authoring failures recur this month, and are they caused by the work or by
+the checker?”
 
 The JSON API mirrors the tools: `GET /api/options`, `GET /api/runs`,
 `GET /api/runs/ID`, `GET /api/runs/ID/samples/ARM/FIXTURE/N`, and the
 `POST /api/runs`, `/api/runs/ID/notes` and `/api/runs/ID/cancel`
-endpoints, which require `Content-Type: application/json`.
+endpoints, which require `Content-Type: application/json`. Authoring has
+`GET /api/authoring` (query parameters for filters, `text`, `days`,
+comma-separated `group_by`, `limit` and `offset`), `/api/authoring/failures`,
+`/api/authoring/views/SURFACE/VIEW`, `/api/authoring/turns/ID`,
+`/api/authoring/turns/ID/transcript`, `/api/authoring/checks/KEY/FILE` and
+`POST /api/authoring/views/SURFACE/VIEW/notes`.
 
 ## Activity libraries
 
@@ -250,8 +264,10 @@ unknown usage explicitly.
 Authoring records live in `.view-generation/authoring/`. They include local
 prompt excerpts of up to 300 characters, fingerprints, usage, tool metadata,
 and captured checkout sources for queued checks. Collection starts when
-enabled. Client logs stay in their original locations. Authoring records
-are available through the local dashboard, outside the evaluation MCP API.
+enabled. Client logs stay in their original locations. The dashboard and the
+MCP endpoint serve the same records. `read_authoring_transcript` reads a
+turn's conversation from the client log on demand, only from the Claude Code
+and Codex log folders, and stores nothing.
 
 Use the comparison filters to see how settings behave in your everyday
 workload. Its pass rates describe observed revisions with recorded checks.

@@ -33,7 +33,7 @@ def text(value):
         return value
     if isinstance(value, list):
         return "\n".join(item.get("text", "") for item in value
-                         if isinstance(item, dict) and item.get("type") in ("text", "input_text"))
+                         if isinstance(item, dict) and item.get("type") in ("text", "input_text", "output_text"))
     return ""
 
 
@@ -198,3 +198,73 @@ def claude(rows, scope):
 
 def parse(path, client, scope):
     return (codex if client == "codex" else claude)(records(path), scope)
+
+
+# Condensed transcript events for reading one turn
+
+def clip(value, limit):
+    value = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
+    return {"text": value[:limit], **({"chars": len(value)} if len(value) > limit else {})}
+
+
+def claude_events(rows, start, end, limit):
+    for row in rows:
+        at = clock(row.get("timestamp"))
+        if row.get("isSidechain") or not start <= at <= end:
+            continue
+        kind = row.get("type")
+        content = (row.get("message") or {}).get("content")
+        if kind == "user" and isinstance(content, str):
+            yield {"kind": "context" if row.get("isMeta") else "user", "at": at, **clip(content, limit)}
+        elif kind in ("user", "assistant") and isinstance(content, list):
+            for block in content:
+                if not isinstance(block, dict):
+                    continue
+                part = block.get("type")
+                if part == "text":
+                    role = "assistant" if kind == "assistant" else "context" if row.get("isMeta") else "user"
+                    yield {"kind": role, "at": at, **clip(block.get("text", ""), limit)}
+                elif part == "thinking" and block.get("thinking"):
+                    yield {"kind": "thinking", "at": at, **clip(block.get("thinking", ""), limit)}
+                elif part == "tool_use":
+                    yield {"kind": "tool_call", "at": at, "id": block.get("id"), "name": block.get("name"),
+                           **clip(block.get("input", {}), limit)}
+                elif part == "tool_result":
+                    output = block.get("content")
+                    yield {"kind": "tool_result", "at": at, "id": block.get("tool_use_id"),
+                           "error": bool(block.get("is_error")),
+                           **clip(text(output) if isinstance(output, list) else output or "", limit)}
+
+
+def codex_events(rows, start, end, limit):
+    roles = {"user": "user", "assistant": "assistant", "developer": "context", "system": "context"}
+    for row in rows:
+        at = clock(row.get("timestamp"))
+        payload = row.get("payload") or {}
+        if row.get("type") != "response_item" or not start <= at <= end:
+            continue
+        kind = payload.get("type")
+        if kind == "message":
+            body = text(payload.get("content"))
+            role = roles.get(payload.get("role"), "context")
+            # Codex sends environment and instruction blocks as user messages.
+            if role == "user" and body.lstrip().startswith("<"):
+                role = "context"
+            yield {"kind": role, "at": at, **clip(body, limit)}
+        elif kind == "reasoning":
+            summary = text(payload.get("summary"))
+            if summary:
+                yield {"kind": "thinking", "at": at, **clip(summary, limit)}
+        elif kind in ("function_call", "custom_tool_call", "local_shell_call"):
+            yield {"kind": "tool_call", "at": at, "id": payload.get("call_id"), "name": payload.get("name", kind),
+                   **clip(payload.get("arguments") or payload.get("input") or payload.get("action") or "", limit)}
+        elif kind in ("function_call_output", "custom_tool_call_output"):
+            output = payload.get("output")
+            if isinstance(output, dict):
+                output = output.get("content", output)
+            yield {"kind": "tool_result", "at": at, "id": payload.get("call_id"),
+                   **clip(text(output) if isinstance(output, list) else output or "", limit)}
+
+
+def events(path, client, start, end, limit):
+    return list((codex_events if client == "codex" else claude_events)(records(path), start, end, limit))

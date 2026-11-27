@@ -42,7 +42,13 @@ mcp = FastMCP(
         "poll get_run for progress and the scoreboard. Tiers, best first: publishable (fixture checks and "
         "strict types pass), working (fixture checks pass), starts (loads without errors), broken. "
         "Use get_sample and read_attempt_artifact for evidence. Record conclusions with add_note: the "
-        "humans reading the dashboard see your notes, and you see theirs in get_run."
+        "humans reading the dashboard see your notes, and you see theirs in get_run. "
+        "Authoring tools cover everyday view work in Codex and Claude Code, captured by local hooks: "
+        "query_authoring compares turns grouped and filtered by client, model, effort, tool, view, check status "
+        "or time; authoring_failures clusters check diagnostics; get_authoring_view gives one view's history and "
+        "effort until it first passed; get_authoring_turn, read_authoring_transcript and read_authoring_check_file "
+        "give a turn's tool calls, conversation and checked sources. A turn's usage covers every view it touched. "
+        "Record conclusions on a view with add_authoring_note."
     ),
     transport_security=TransportSecuritySettings(
         enable_dns_rebinding_protection=True,
@@ -342,9 +348,15 @@ def get_sample(run_id: str, arm: str, fixture: str, sample: int) -> dict:
 @mcp.tool()
 def read_attempt_artifact(run_id: str, attempt: str, name: str, offset: int = 0) -> dict:
     """Read up to 8,000 characters from a text artifact. Pass next_offset to continue."""
-    if offset < 0 or name == "preview.png":
-        raise ValueError("Use a text artifact and a nonnegative character offset.")
-    with artifact_path(run_folder(run_id), attempt, name).open(errors="replace") as file:
+    if name == "preview.png":
+        raise ValueError("Use a text artifact.")
+    return read_window(artifact_path(run_folder(run_id), attempt, name), offset)
+
+
+def read_window(path, offset):
+    if offset < 0:
+        raise ValueError("Use a nonnegative character offset.")
+    with path.open(errors="replace") as file:
         remaining = offset
         while remaining:
             skipped = file.read(min(remaining, 8000))
@@ -366,6 +378,75 @@ def cancel_run(run_id: str) -> dict:
 def add_note(run_id: str, text: str, agent_name: str = "", ctx: Context = None) -> dict:
     """Attach a note to a run, such as a conclusion or what to try next. Humans see it on the run page."""
     return append_note(run_folder(run_id), agent_origin(agent_name, ctx), text)
+
+
+# Authoring tools
+
+def authoring_root():
+    return ROOT / "authoring"
+
+
+@mcp.tool()
+def query_authoring(days: float = 30, filters: dict[str, str] | None = None, text: str | None = None,
+                    group_by: list[str] | None = None, limit: int = 25, offset: int = 0) -> dict:
+    """Compare everyday authoring turns. Filters and group_by (up to two) take client, model, effort,
+    surface, change, tool, prompt, instruction, target, status, contract, day or week; text matches the
+    prompt excerpt. Filtering or grouping by change, target, status or contract narrows each turn to its
+    matching revisions. Each group reports turns, views, revision check statuses and pass rate, seconds,
+    token and tool-call distributions, tool error rate and top tools. breakdown counts the selection by every
+    dimension; turns pages through matching turns, newest first. group_by defaults to client; pass [] for none."""
+    return authoring_report.query(authoring_root(), days, filters, text,
+                                  ["client"] if group_by is None else group_by, limit, offset)
+
+
+@mcp.tool()
+def authoring_failures(days: float = 30, filters: dict[str, str] | None = None, text: str | None = None,
+                       limit: int = 20) -> dict:
+    """Cluster check diagnostics of authoring revisions into recurring patterns, ranked by revisions
+    affected, with stage, error code, affected views, clients, models and example messages. Takes the same
+    filters as query_authoring. A cluster spanning unrelated views often points at the checker, not the work."""
+    return authoring_report.failures(authoring_root(), days, filters, text, limit)
+
+
+@mcp.tool()
+def get_authoring_view(surface: str, target: str) -> dict:
+    """One view's authoring history (surface checkout or workshop, target the view slug): statistics, the
+    sequence of check statuses, the first passing turn with the turns, time, tokens and tool calls it took,
+    commits, notes and the full timeline."""
+    return authoring_report.view_history(authoring_root(), surface, target)
+
+
+@mcp.tool()
+def get_authoring_turn(turn_id: str) -> dict:
+    """Everything recorded for one turn: prompt excerpt and fingerprints, instruction files, models, effort,
+    usage, views read and in the baseline, every tool call with timing, sizes and status, and each revision
+    with its check stages, diagnostics and the files you can read with read_authoring_check_file."""
+    return authoring_report.turn_detail(authoring_root(), turn_id)
+
+
+@mcp.tool()
+def read_authoring_transcript(turn_id: str, offset: int = 0, limit: int = 40, max_chars: int = 1500,
+                              kinds: list[str] | None = None) -> dict:
+    """Read a turn's conversation from the client's own transcript, condensed into events: user, assistant,
+    thinking, context, tool_call and tool_result. Each event's text is clipped to max_chars, with chars giving
+    the full length; to read one event in full, pass its index as offset, limit 1 and a larger max_chars.
+    kinds keeps only those event kinds. Transcripts are read on demand and never stored."""
+    return authoring_report.transcript(authoring_root(), turn_id, offset, limit, max_chars, kinds)
+
+
+@mcp.tool()
+def read_authoring_check_file(check_key: str, name: str, offset: int = 0) -> dict:
+    """Read up to 8,000 characters of a checked revision: the captured view.yml, activity.html, activity.css,
+    activity.js, _shared.js or _frame.css, or the checker's check.json and snapshot.json. Pass next_offset
+    to continue."""
+    return read_window(authoring_report.check_file(authoring_root(), check_key, name), offset)
+
+
+@mcp.tool()
+def add_authoring_note(surface: str, target: str, text: str, agent_name: str = "", ctx: Context = None) -> dict:
+    """Attach a note to a view's authoring history, such as a finding or what to change in the workflow.
+    Humans see it on the view's Authoring page, and get_authoring_view returns theirs."""
+    return authoring_report.add_note(authoring_root(), surface, target, agent_origin(agent_name, ctx), text, now())
 
 
 def request_cancel(folder):
@@ -461,19 +542,33 @@ def render_new(form, error=None, status=200):
 
 @flask.get("/authoring")
 def authoring_page():
-    return render_authoring(**authoring_report.overview(ROOT / "authoring", request.args))
+    return render_authoring(**authoring_report.overview(authoring_root(), request.args))
 
 
 @flask.get("/authoring/<surface>/<target>")
 def authoring_view(surface, target):
     if surface not in ("checkout", "workshop"):
         abort(404)
-    _, turns = authoring_report.read_activity(ROOT / "authoring", surface=surface, target=target)
+    _, turns = authoring_report.read_activity(authoring_root(), surface=surface, target=target)
     if not turns:
         abort(404)
     first_pass = next((turn for turn in reversed(turns)
                        if any(item["status"] == "pass" for item in turn["revisions"])), None)
-    return render_authoring(turns=turns, target=target, surface=surface, first_pass=first_pass)
+    return render_authoring(turns=turns, target=target, surface=surface, first_pass=first_pass,
+                            notes=authoring_report.read_notes(authoring_root(), surface, target))
+
+
+@flask.post("/authoring/<surface>/<target>/notes")
+def authoring_note_page(surface, target):
+    check_csrf()
+    try:
+        authoring_report.add_note(authoring_root(), surface, target, {"kind": "human", "name": "dashboard"},
+                                  request.form.get("text", ""), now())
+    except LookupError:
+        abort(404)
+    except ValueError as error:
+        abort(400, str(error))
+    return redirect(url_for("authoring_view", surface=surface, target=target) + "#notes", code=303)
 
 
 def render_authoring(**context):
@@ -660,6 +755,91 @@ def download(run_id, attempt, name):
     )
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Content-Security-Policy"] = "default-src 'none'; img-src 'self'"
+    return response
+
+
+def authoring_api(call, *args, **kwargs):
+    try:
+        return jsonify(call(*args, **kwargs))
+    except LookupError as error:
+        return jsonify(error=str(error)), 404
+    except (ValueError, TypeError) as error:
+        return jsonify(error=str(error)), 400
+
+
+def query_args():
+    args = request.args
+    names = authoring_report.ANALYSIS_FIELDS
+    group = args.get("group_by")
+    return {"days": float(args.get("days", 30)), "text": args.get("text") or None,
+            "filters": {name: args[name] for name in names if args.get(name)},
+            "group_by": None if group is None else [item for item in group.split(",") if item]}
+
+
+@flask.get("/api/authoring")
+def api_authoring():
+    try:
+        options = query_args()
+        options |= {"limit": int(request.args.get("limit", 25)), "offset": int(request.args.get("offset", 0))}
+    except ValueError:
+        return jsonify(error="days, limit and offset must be numbers"), 400
+    return authoring_api(query_authoring, **options)
+
+
+@flask.get("/api/authoring/failures")
+def api_authoring_failures():
+    try:
+        options = query_args()
+        options.pop("group_by")
+        options["limit"] = int(request.args.get("limit", 20))
+    except ValueError:
+        return jsonify(error="days and limit must be numbers"), 400
+    return authoring_api(authoring_failures, **options)
+
+
+@flask.get("/api/authoring/views/<surface>/<target>")
+def api_authoring_view(surface, target):
+    return authoring_api(get_authoring_view, surface, target)
+
+
+@flask.post("/api/authoring/views/<surface>/<target>/notes")
+def api_authoring_note(surface, target):
+    body = json_body()
+    try:
+        note = authoring_report.add_note(authoring_root(), surface, target, agent_origin(body.get("agent_name")),
+                                         body.get("text"), now())
+    except LookupError as error:
+        return jsonify(error=str(error)), 404
+    except ValueError as error:
+        return jsonify(error=str(error)), 400
+    return jsonify(note), 201
+
+
+@flask.get("/api/authoring/turns/<turn_id>")
+def api_authoring_turn(turn_id):
+    return authoring_api(get_authoring_turn, turn_id)
+
+
+@flask.get("/api/authoring/turns/<turn_id>/transcript")
+def api_authoring_transcript(turn_id):
+    try:
+        options = {key: int(request.args[key]) for key in ("offset", "limit", "max_chars") if key in request.args}
+    except ValueError:
+        return jsonify(error="offset, limit and max_chars must be numbers"), 400
+    if request.args.get("kinds"):
+        options["kinds"] = request.args["kinds"].split(",")
+    return authoring_api(read_authoring_transcript, turn_id, **options)
+
+
+@flask.get("/api/authoring/checks/<check_key>/<name>")
+def api_authoring_check_file(check_key, name):
+    try:
+        path = authoring_report.check_file(authoring_root(), check_key, name)
+    except LookupError as error:
+        return jsonify(error=str(error)), 404
+    response = send_file(path, mimetype="text/plain", download_name=name)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Content-Security-Policy"] = "default-src 'none'"
     return response
 
 

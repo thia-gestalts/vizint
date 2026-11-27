@@ -4,11 +4,11 @@
   {{ name[:12] if name|length == 64 else name }}
 {%- endmacro %}
 {% macro metric(pair) -%}
-  {% if pair[1] %}{{ pair[0] }} <small>({{ pair[1] }})</small>{% else %}–{% endif %}
+  {% if pair.n %}{{ pair.median }} <small>({{ pair.n }})</small>{% else %}–{% endif %}
 {%- endmacro %}
 {% macro coverage(stats) %}
-  {% for contract, (passed, checked, observed) in stats.rate.items() %}
-    <div>{{ contract }} · {{ checked }}/{{ observed }} checked{% if checked %} · {{ passed }}/{{ checked }} passed{% endif %}</div>
+  {% for contract, rate in stats.rate.items() %}
+    <div>{{ contract }} · {{ rate.checked }}/{{ rate.observed }} checked{% if rate.checked %} · {{ rate.passed }}/{{ rate.checked }} passed{% endif %}</div>
   {% else %}–{% endfor %}
 {% endmacro %}
 {% block content %}
@@ -16,6 +16,25 @@
   <p><a href="{{ url_for('authoring_page') }}">Authoring</a> / {{ surface|capitalize }}</p>
   <h1>{{ target }}</h1>
   {% if first_pass %}<p>First observed passing revision <a href="#turn-{{ first_pass.id }}">{{ first_pass.date }}</a></p>{% endif %}
+  <section id="notes" aria-labelledby="notes-heading">
+    <h2 id="notes-heading">Notes</h2>
+    <div class="notes">
+      {% for note in notes %}
+        <article class="note {{ note.author.kind }}">
+          <div class="small"><b>{{ 'Agent · ' ~ note.author.name if note.author.kind == 'agent' else 'You' }}</b> <span class="muted">{{ note.at }}</span></div>
+          <p>{{ note.text }}</p>
+        </article>
+      {% else %}
+        <p class="muted small">No notes yet. Agents can add them with <code>add_authoring_note</code> and read yours with <code>get_authoring_view</code>.</p>
+      {% endfor %}
+      <form method="post" action="{{ url_for('authoring_note_page', surface=surface, target=target) }}" class="stack">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <label class="field">Add a note <span class="hint">A finding, a doubt, or what to change next.</span>
+          <textarea name="text" required maxlength="4000"></textarea></label>
+        <div><button class="button">Add note</button></div>
+      </form>
+    </div>
+  </section>
 {% else %}
   <h1>Authoring</h1>
   {% if not enabled %}<p>To enable automatic capture, run <code>python3 scripts/eval-admin/authoring.py setup</code> and start new client sessions.</p>{% endif %}

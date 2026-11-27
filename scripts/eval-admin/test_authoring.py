@@ -148,6 +148,97 @@ class AuthoringTest(unittest.TestCase):
         self.assertEqual((first["usage"]["input"], second["usage"]["input"]), (26, 4))
         self.assertEqual(second["efforts"], [])
 
+    def record_checked_turns(self, transcript):
+        """Two checkout turns on demo: the first fails a check, the second passes."""
+        for index, (body, status) in enumerate((("let n = 2;", "fail"), ("let n = 3;", "pass"))):
+            self.send("claude", "UserPromptSubmit", prompt=f"Attempt {index}", model="opus",
+                      transcript_path=str(transcript))
+            self.send("claude", "PostToolUse", tool_name="Edit", tool_use_id=f"edit-{index}",
+                      tool_input={"file_path": str(self.source)}, tool_response="ok")
+            self.source.write_text(body)
+            self.send("claude", "Stop")
+            with authoring.database(self.root) as db:
+                key = db.execute("SELECT key FROM checks WHERE status='queued'").fetchone()["key"]
+                diagnostics = [{"stage": "bundle", "message": f"Build failed with 1 error:\nactivity-source:"
+                                f"{self.root}/authoring-checks/{key}/activity.js:2:28: ERROR: Could not resolve \"./q{index}.mjs\""}]
+                db.execute("UPDATE checks SET status=?,diagnostics=? WHERE key=?",
+                           (status, json.dumps(diagnostics if status == "fail" else []), key))
+            (self.root / "authoring-checks" / key / "check.json").write_text(json.dumps({"checks": {"bundle": status}}))
+        return key
+
+    def test_agent_tools_cover_authoring_analysis(self):
+        config = self.base / "claude"
+        transcript = config / "projects/vizint/session.jsonl"
+        transcript.parent.mkdir(parents=True)
+        environment = patch.dict("os.environ", {"CLAUDE_CONFIG_DIR": str(config)})
+        environment.start()
+        self.addCleanup(environment.stop)
+        key = self.record_checked_turns(transcript)
+        at = time.time()
+        rows = [{"type": "user", "message": {"content": "Attempt 1"}},
+                {"type": "assistant", "message": {"content": [
+                    {"type": "text", "text": "Fixing the import."},
+                    {"type": "tool_use", "id": "edit-1", "name": "Edit", "input": {"file_path": "activity.js"}}]}},
+                {"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "edit-1",
+                                                          "content": [{"type": "text", "text": "x" * 500}]}]}}]
+        transcript.write_text("".join(json.dumps({**row, "cwd": str(self.checkout), "timestamp": stamp(at)}) + "\n"
+                                      for row in rows))
+
+        result = admin.query_authoring(group_by=["status"])
+        self.assertEqual({group["key"]["status"]: group["turns"] for group in result["groups"]}, {"fail": 1, "pass": 1})
+        self.assertEqual(result["summary"]["pass_rate"], 0.5)
+        self.assertEqual(result["breakdown"]["target"], {"demo": 2})
+        narrowed = admin.query_authoring(filters={"status": "pass"}, text="attempt 1", group_by=[])
+        self.assertEqual([turn["prompt"] for turn in narrowed["turns"]["items"]], ["Attempt 1"])
+        with self.assertRaises(ValueError):
+            admin.query_authoring(group_by=["client", "model", "effort"])
+
+        clusters = admin.authoring_failures()["clusters"]
+        self.assertEqual([(item["stage"], item["revisions"]) for item in clusters], [("bundle", 1)])
+        self.assertEqual(clusters[0]["pattern"], "activity.js: ERROR: Could not resolve …")
+
+        view = admin.get_authoring_view("checkout", "demo")
+        self.assertEqual(view["status_sequence"], ["fail", "pass"])
+        self.assertEqual(view["first_pass"]["effort_until"]["turns"], 2)
+        latest = view["timeline"][-1]["id"]
+
+        turn = admin.get_authoring_turn(latest)
+        self.assertTrue(turn["transcript_available"])
+        self.assertEqual([tool["name"] for tool in turn["tools"]], ["Edit"])
+        self.assertEqual(turn["revisions"][0]["checks"], {"bundle": "pass"})
+        self.assertEqual(admin.read_authoring_check_file(key, "activity.js")["text"], "let n = 3;")
+        with self.assertRaises(LookupError):
+            admin.read_authoring_check_file(key, "../authoring.sqlite")
+
+        events = admin.read_authoring_transcript(latest, max_chars=100)
+        self.assertEqual([event["kind"] for event in events["events"]], ["user", "assistant", "tool_call", "tool_result"])
+        self.assertEqual(events["events"][3]["chars"], 500)
+        only = admin.read_authoring_transcript(latest, kinds=["assistant"])["events"]
+        self.assertEqual(only[0]["text"], "Fixing the import.")
+
+        admin.add_authoring_note("checkout", "demo", "Imports break the checker.", "codex")
+        with self.assertRaises(LookupError):
+            admin.add_authoring_note("checkout", "missing", "x")
+        self.assertEqual(admin.get_authoring_view("checkout", "demo")["notes"][0]["author"], {"kind": "agent", "name": "codex"})
+        client = admin.flask.test_client()
+        self.assertIn(b"Imports break the checker.", client.get("/authoring/checkout/demo").data)
+        self.assertEqual(client.get("/api/authoring?group_by=client,status&status=fail").json["turns"]["total"], 1)
+        self.assertEqual(client.get("/api/authoring/views/checkout/missing").status_code, 404)
+        self.assertEqual(client.get(f"/api/authoring/turns/{latest}/transcript?kinds=user").json["total"], 1)
+        response = client.get(f"/api/authoring/checks/{key}/activity.js")
+        self.assertEqual((response.data, response.mimetype), (b"let n = 3;", "text/plain"))
+        response.close()
+
+    def test_transcripts_outside_client_folders_stay_unread(self):
+        outside = self.base / "elsewhere.jsonl"
+        outside.write_text("")
+        with patch.dict("os.environ", {"CLAUDE_CONFIG_DIR": str(self.base / "claude")}):
+            self.record_checked_turns(outside)
+            turn = admin.query_authoring()["turns"]["items"][0]["id"]
+            self.assertFalse(admin.get_authoring_turn(turn)["transcript_available"])
+            with self.assertRaises(LookupError):
+                admin.read_authoring_transcript(turn)
+
     def test_setup_merges_and_disables_only_our_hooks(self):
         config = self.base / "config"
         config.mkdir()

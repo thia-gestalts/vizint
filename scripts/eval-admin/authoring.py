@@ -92,6 +92,10 @@ def connect(root):
             PRIMARY KEY (turn, target)
         );
         CREATE TABLE IF NOT EXISTS transcripts (path TEXT PRIMARY KEY, seen TEXT);
+        CREATE TABLE IF NOT EXISTS notes (
+            id INTEGER PRIMARY KEY, surface TEXT, target TEXT, at TEXT, author TEXT, text TEXT
+        );
+        CREATE INDEX IF NOT EXISTS authoring_notes ON notes(surface, target);
     """)
     return db
 
