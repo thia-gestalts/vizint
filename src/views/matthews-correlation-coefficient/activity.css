@@ -1,0 +1,29 @@
+main { max-width: 57rem; margin-inline: auto; }
+h2 { margin: 0; font-size: 1.05rem; }
+p { margin: .45rem 0 .8rem; }
+.presets { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1rem; }
+button, input { font: inherit; color: inherit; }
+button { background: #fff; border: 1px solid #aabac7; border-radius: .5rem; padding: .45rem .65rem; cursor: pointer; }
+button[aria-pressed="true"] { background: #164c56; border-color: #164c56; color: white; }
+.workspace { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.workspace section, details { border: 1px solid #cbd8de; border-radius: .8rem; padding: 1rem; }
+.readout { background: #eef7f7; color: #173840; }
+table { width: 100%; border-spacing: .25rem; text-align: left; font-size: .85rem; }
+td, th { padding: .25rem; }
+tbody td { background: #fff0e4; border-radius: .4rem; padding: .45rem; }
+tbody td.correct { background: #daf0eb; }
+input { display: block; box-sizing: border-box; width: 100%; min-width: 0; margin-block: .25rem .4rem; padding: .3rem; background: #fff; border: 1px solid #899ba6; border-radius: .25rem; }
+.share { background: #9e4d22; height: .3rem; border-radius: 1rem; transition: width .2s ease; }
+.correct .share { background: #157567; }
+.score { display: block; font-size: 2.35rem; font-weight: 700; margin-bottom: .55rem; }
+.scale { position: relative; height: .5rem; border-radius: 1rem; background: linear-gradient(90deg, #b56338, #a5b8be 50%, #157567); margin-inline: .4rem; }
+#marker { position: absolute; top: 50%; width: .95rem; height: .95rem; border-radius: 50%; border: 2px solid white; background: #173840; transform: translate(-50%, -50%); transition: left .2s ease; }
+#marker[hidden] { display: none; }
+.ticks { display: flex; justify-content: space-between; text-align: center; margin-top: .45rem; font-size: .75rem; }
+.accuracy { font-weight: 700; margin-top: 1rem; }
+#interpretation { min-height: 3em; margin-bottom: 0; }
+details { margin-top: .75rem; }
+summary { cursor: pointer; font-weight: 600; }
+.formula, #calculation { overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+@media (max-width: 660px) { .workspace { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { .share, #marker { transition: none; } }

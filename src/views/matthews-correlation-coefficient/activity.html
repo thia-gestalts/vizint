@@ -1,0 +1,41 @@
+<main>
+  <div class="presets" role="group" aria-label="Confusion matrix examples">
+    <button type="button" aria-pressed="true">Balanced · 90%</button>
+    <button type="button" aria-pressed="false">Imbalanced · 90%</button>
+    <button type="button" aria-pressed="false">All predictions flipped</button>
+    <button type="button" aria-pressed="false">Always negative</button>
+  </div>
+  <div class="workspace">
+    <section aria-labelledby="matrix-title">
+      <h2 id="matrix-title">Confusion matrix</h2>
+      <p>Edit the counts. Each bar shows that cell’s share of all cases.</p>
+      <table aria-labelledby="matrix-title">
+        <thead><tr><td>Actual ↓</td><th scope="col">Predicted +</th><th scope="col">Predicted −</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Positive</th>
+            <td class="correct"><label>True + <input aria-label="True positives" type="number" min="0" max="1000000" step="1" value="45"></label><div class="share" aria-hidden="true"></div></td>
+            <td><label>False − <input aria-label="False negatives" type="number" min="0" max="1000000" step="1" value="5"></label><div class="share" aria-hidden="true"></div></td>
+          </tr>
+          <tr><th scope="row">Negative</th>
+            <td><label>False + <input aria-label="False positives" type="number" min="0" max="1000000" step="1" value="5"></label><div class="share" aria-hidden="true"></div></td>
+            <td class="correct"><label>True − <input aria-label="True negatives" type="number" min="0" max="1000000" step="1" value="45"></label><div class="share" aria-hidden="true"></div></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+    <section class="readout" aria-labelledby="score-title">
+      <h2 id="score-title">Matthews correlation coefficient</h2>
+      <output class="score" id="mcc">0.800</output>
+      <div class="scale" aria-hidden="true"><span id="marker"></span></div>
+      <div class="ticks" aria-hidden="true"><span>−1<br>Reversed</span><span>0<br>Uncorrelated</span><span>+1<br>Perfect</span></div>
+      <p class="accuracy">Accuracy <output id="accuracy">90.0%</output></p>
+      <p id="interpretation" aria-live="polite"></p>
+    </section>
+  </div>
+  <details>
+    <summary>How MCC is calculated</summary>
+    <p>MCC is the Pearson correlation between actual and predicted labels encoded as 0 and 1.</p>
+    <p class="formula">MCC = (TP × TN − FP × FN) / √[(TP + FP)(TP + FN)(TN + FP)(TN + FN)]</p>
+    <output id="calculation"></output>
+  </details>
+</main>

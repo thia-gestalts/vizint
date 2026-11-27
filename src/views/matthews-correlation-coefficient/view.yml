@@ -1,0 +1,24 @@
+title: Matthews correlation coefficient
+intro: Edit a binary confusion matrix and see how Matthews correlation coefficient
+  and accuracy respond. Compare two classifiers with the same accuracy.
+type: engagement
+frameHeight: 34rem
+previewReady: '#mcc'
+patterns: [editable-table, presets, live-readout]
+learning:
+  records:
+    - kind: topic
+      name: Matthews correlation coefficient
+    - kind: fact
+      key: matthews-correlation-coefficient/equal-accuracy
+      statement: Two binary classifiers with the same accuracy can have different
+        Matthews correlation coefficients.
+  topicLinks:
+    - subject: {kind: topic, name: Matthews correlation coefficient}
+      relation: within
+      object: {kind: topic, name: statistics}
+  topics:
+    - target: {kind: topic, name: Matthews correlation coefficient}
+      weight: 1
+  teaches:
+    - target: {kind: fact, key: matthews-correlation-coefficient/equal-accuracy}
