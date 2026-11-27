@@ -1,8 +1,3 @@
-<nav aria-label="World Map" class="tabs">
-  <button type="button" data-page="practice" aria-pressed="true">Practice</button>
-  <button type="button" data-page="stats" aria-pressed="false">Stats</button>
-  <button type="button" data-page="settings" aria-pressed="false">Settings</button>
-</nav>
 <section id="practice">
   <div id="map"></div>
   <p id="prompt" role="status">Loading…</p>
@@ -12,18 +7,4 @@
     <button id="reset" type="button" aria-label="Reset map">↺</button>
   </div>
   <div id="answers"></div>
-</section>
-<section id="stats" hidden>
-  <h2>World Map statistics</h2>
-  <div id="summary"></div>
-  <h3>Last 14 days</h3>
-  <div id="history"></div>
-  <div class="table-wrap"><table>
-    <thead><tr><th>Country</th><th>State</th><th>Retrievability</th><th>Stability</th></tr></thead>
-    <tbody id="country-rows"></tbody>
-  </table></div>
-</section>
-<section id="settings" hidden>
-  <h2>World Map settings</h2>
-  <label>Theme <select id="theme"><option value="light">Light</option><option value="dark">Dark</option></select></label>
 </section>

@@ -72,6 +72,7 @@ export async function loadCatalog(root = new URL('views/', import.meta.url)) {
         if (field in data && typeof data[field] !== 'boolean') throw new Error(`Expected a boolean ${field}`);
       }
       if (data.customHost) requirePath('host.mjs');
+      else if (data.type === 'attempt') requirePath('questions.mjs');
       if ('libraries' in data) validateLibraries(data.libraries);
       if ('patterns' in data && (!Array.isArray(data.patterns) || new Set(data.patterns).size !== data.patterns.length ||
           data.patterns.some(pattern => typeof pattern !== 'string' || !segment.test(pattern)))) {
@@ -94,7 +95,8 @@ export async function loadCatalog(root = new URL('views/', import.meta.url)) {
       const content = learningModule
         ? await (await import(new URL(learningModule, folder))).default(app)
         : learning(authored ?? {});
-      return { order: order ?? Infinity, entry: { slug, activity, ...entry, learning: content } };
+      const preview = statSync(new URL('preview.png', folder), { throwIfNoEntry: false })?.isFile() ?? false;
+      return { order: order ?? Infinity, entry: { slug, activity, ...entry, preview, learning: content } };
     } catch (error) {
       throw new Error(`${manifest.pathname}: ${error.message}`, { cause: error });
     }

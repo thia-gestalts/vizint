@@ -16,6 +16,10 @@ learning:
   records:
     - kind: topic
       name: Spaced Repetition
+    - kind: fact
+      key: spaced-repetition/half-life-regression
+      statement: Half-life regression predicts recall as p = 2^(−Δ/h), where the
+        half-life h = 2^(Θ·x) grows with the weighted count of past recalls.
     - kind: question
       id: 0d9b7f62-5a43-4c1e-9b8a-3f6e2c1d7a54
       text: Why does a memory fade more slowly after each successful review?

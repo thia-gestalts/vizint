@@ -26,6 +26,14 @@ export function viewPath(entry, exercise) {
   return `${entry.slug}/${exercise ? '#' + exerciseAnchor(exercise) : ''}`;
 }
 
+// A view link shows the view's preview screenshot when it has one.
+export function viewLink(prefix, entry) {
+  const image = entry.preview
+    ? `<img class="w-28 h-auto shrink-0 rounded-md border border-base-300 bg-base-200 object-cover" src="${prefix}${entry.slug}/preview.png" width="768" height="464" alt="" loading="lazy" decoding="async">`
+    : '';
+  return `<a class="inline-flex items-center gap-3" href="${prefix}${viewPath(entry)}">${image}<span class="link link-hover link-primary font-medium">${escapeHTML(entry.title)}</span></a>`;
+}
+
 const linkTo = (path, label) => `<a class="link link-hover link-primary" href="${path}">${escapeHTML(label)}</a>`;
 const reasonText = (reason) => reason ? `<p class="text-sm text-base-content/75">${escapeHTML(reason)}</p>` : '';
 
@@ -57,9 +65,9 @@ export function activityLearning(links, exercise) {
   const scoped = combinePracticeAndAssessment(links.filter((link) => link.exercise === exercise));
   return relations.map(([relation, label]) => {
     const items = visible(scoped, relation).map(({ target, resolved, reason }) => {
-      const isView = target.kind === 'view';
-      const path = isView ? viewPath(resolved) : recordPath(resolved);
-      return linkTo('../' + path, isView ? resolved.title : recordLabel(resolved)) + reasonText(reason);
+      const link = target.kind === 'view' ? viewLink('../', resolved)
+        : linkTo('../' + recordPath(resolved), recordLabel(resolved));
+      return link + reasonText(reason);
     });
     return section(label, items, exercise ? 3 : 2);
   }).join('');
@@ -80,7 +88,7 @@ function overviewSections(links, prefix) {
       const exercises = group.filter((link) => link.exercise);
       const exerciseItems = exercises.map(({ exercise, reason }) =>
         `<li>${linkTo(prefix + viewPath(entry, exercise), exercise.title)}${reasonText(reason)}</li>`);
-      return linkTo(prefix + viewPath(entry), entry.title) + reasonText(view?.reason)
+      return viewLink(prefix, entry) + reasonText(view?.reason)
         + (exercises.length ? `<ul class="mt-1 ml-4 space-y-1">${exerciseItems.join('')}</ul>` : '');
     });
     return section(label, items);
@@ -101,7 +109,7 @@ function topicSections(graph, key, prefix) {
       gathered.get(activity).via.set(identity(topic), topic);
     }
   }
-  const viaItems = [...gathered.values()].map(({ entry, via }) => linkTo(prefix + viewPath(entry), entry.title)
+  const viaItems = [...gathered.values()].map(({ entry, via }) => viewLink(prefix, entry)
     + `<p class="text-sm text-base-content/75">Under ${[...via.values()].map((topic) =>
       linkTo(prefix + recordPath(topic), recordLabel(topic))).join(', ')}</p>`);
   return {
@@ -114,7 +122,7 @@ function topicSections(graph, key, prefix) {
 
 export async function writeLearningPages({ output, page, entries, graph }) {
   const searchItems = entries.map((entry) => ({
-    kind: 'view', label: entry.title, path: viewPath(entry),
+    kind: 'view', label: entry.title, path: viewPath(entry), ...(entry.preview && { preview: `${entry.slug}/preview.png` }),
   }));
   const searchPath = new URL('learn/', output);
   await mkdir(searchPath);

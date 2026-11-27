@@ -22,9 +22,15 @@ function readIndex() {
   });
 }
 
-function renderItem({ label, kind, path }) {
+function renderItem({ label, kind, path, preview }) {
   const item = document.createElement('li');
-  item.className = 'rounded-lg border border-base-300 bg-base-100 p-3';
+  item.className = 'flex items-center gap-3 rounded-lg border border-base-300 bg-base-100 p-3';
+  if (preview) {
+    const image = document.createElement('img');
+    image.className = 'w-20 h-auto shrink-0 rounded-md border border-base-300 bg-base-200 object-cover';
+    Object.assign(image, { src: '../' + preview, width: 768, height: 464, alt: '', loading: 'lazy', decoding: 'async' });
+    item.append(image);
+  }
   const link = document.createElement('a');
   link.className = 'link link-hover link-primary font-medium';
   link.href = '../' + path;

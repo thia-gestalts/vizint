@@ -1,9 +1,10 @@
 import { app, entries } from './catalog.mjs';
-import { newQuestion } from './rounding.mjs';
 import { saveObservation } from './storage.mjs';
 
 const mount = document.querySelector('#activity');
 const entry = entries.find(({ slug }) => slug === mount.dataset.entry);
+// Attempts supply their questions from the view's own questions.mjs.
+const { newQuestion } = entry.type === 'attempt' ? await import(`./${entry.slug}/questions.mjs`) : {};
 const frame = document.querySelector('#activity-template').content.firstElementChild.cloneNode();
 const retry = document.querySelector('#retry');
 let question;

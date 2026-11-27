@@ -11,7 +11,6 @@ const pick = list => list[Math.floor(Math.random() * list.length)];
 export const day = date => new Date(date).toLocaleDateString('en-CA');
 export const activityFor = ({ type, panIndex, groupId }) =>
   ['world-map', type, type === 'find-in-neighborhood' ? panIndex : groupId].filter(value => value !== undefined).join('/');
-export const retrievability = card => fsrsScheduler.get_retrievability(card, new Date(), false);
 
 export function replay(records, app, facts) {
   const codes = new Map([...facts].map(([code, fact]) => [fact.id, code]));

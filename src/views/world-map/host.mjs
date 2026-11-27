@@ -1,6 +1,6 @@
 import { app, entries } from '../catalog.mjs';
-import { readRecords, saveObservation, session } from '../storage.mjs';
-import { activityFor, day, nextExercise, replay, retrievability } from './scheduler.mjs';
+import { readRecords, saveObservation } from '../storage.mjs';
+import { activityFor, nextExercise, replay } from './scheduler.mjs';
 
 const mount = document.querySelector('#activity');
 const entry = entries.find(item => item.slug === mount.dataset.entry);
@@ -10,22 +10,12 @@ const status = document.querySelector('#save-status');
 const topic = entry.targets.find(record => record.kind === 'topic');
 const facts = new Map(entry.targets.filter(record => record.kind === 'fact')
   .map(record => [record.id.split('/').at(-1).toUpperCase(), record]));
-const profile = JSON.stringify(session ? [session.origin, session.account.id] : ['guest']);
-const timeKey = `vizint-world-map-time/${profile}`;
-const themeKey = `vizint-world-map-theme/${profile}`;
 const send = message => frame.contentWindow.postMessage(message, '*');
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
-const states = ['New', 'Learning', 'Review', 'Relearning'];
 let geometry, countries, groups, names, exercise, lastCountry, question, pending;
 let groupIndex = 0;
-let page = 'practice';
 let busy = false;
 let recovery;
-let theme = localStorage.getItem(themeKey) === 'dark' ? 'dark' : 'light';
-const time = () => JSON.parse(localStorage.getItem(timeKey) ?? '{}');
-const duration = ms => ms >= 3_600_000
-  ? `${Math.floor(ms / 3_600_000)}h ${Math.floor(ms / 60_000) % 60}m`
-  : ms >= 60_000 ? `${Math.floor(ms / 60_000)}m ${Math.floor(ms / 1000) % 60}s` : `${Math.floor(ms / 1000)}s`;
 
 async function run(work, error) {
   if (busy) return;
@@ -85,9 +75,7 @@ async function initialize() {
   [geometry, countries, groups] = await Promise.all(['map.geo', 'countries', 'groups'].map(fetchData));
   names = new Map(geometry.features.map(({ properties }) => [properties.code, properties.name]));
   send({ type: 'geometry', geometry });
-  send({ type: 'theme', value: theme });
   await selectNext();
-  if (page === 'stats') void stats();
 }
 
 async function persist() {
@@ -107,7 +95,6 @@ async function persist() {
       send({ type: 'status', text: status.textContent });
     }
   }
-  if (page === 'stats') void stats();
 }
 
 function feedback(result) {
@@ -140,73 +127,12 @@ function answer(data) {
   void run(persist, 'Could not save this attempt.');
 }
 
-async function stats() {
-  if (!names) return;
-  try {
-    const progress = replay(await readRecords(), app, facts);
-    const times = time();
-    const attempts = new Map();
-    for (const event of progress.events) {
-      const date = day(event.occurredAtMs);
-      attempts.set(date, (attempts.get(date) ?? 0) + 1);
-    }
-    const now = new Date();
-    const history = Array.from({ length: 14 }, (_, index) => {
-      const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() + index - 13);
-      const key = day(date);
-      return [date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
-        attempts.get(key) ?? 0, duration(times[key] ?? 0), times[key] ?? 0];
-    });
-    send({ type: 'stats', stats: {
-      summary: [['Countries practiced', progress.countries.size], ['Attempts today', attempts.get(day(now)) ?? 0],
-        ['Total attempts', progress.events.length],
-        ['Time practiced on this device', duration(Object.values(times).reduce((sum, ms) => sum + ms, 0))]],
-      countries: [...progress.countries].map(([code, card]) =>
-        [names.get(code), states[card.state], `${Math.round(retrievability(card) * 100)}%`,
-          card.stability > 1 ? `${Math.round(card.stability)}d` : '—'])
-        .sort(([a], [b]) => a.localeCompare(b)),
-      history,
-    } });
-  } catch {
-    send({ type: 'stats-error', text: 'Could not load statistics. Reopen Stats to retry.' });
-  }
-}
-
-let seconds = 0;
-function flushTime() {
-  if (!seconds) return;
-  const key = day(Date.now());
-  const ms = seconds * 1000;
-  seconds = 0;
-  // The synchronous update also works when the document is being hidden.
-  const values = time();
-  values[key] = (values[key] ?? 0) + ms;
-  localStorage.setItem(timeKey, JSON.stringify(values));
-}
-setInterval(() => {
-  if (page !== 'practice' || !question || document.hidden || !document.hasFocus()) return;
-  seconds += 1;
-  if (seconds >= 5) flushTime();
-}, 1000);
-document.addEventListener('visibilitychange', () => { if (document.hidden) flushTime(); });
-addEventListener('pagehide', flushTime);
-
 let ready = false;
 addEventListener('message', ({ source, origin, data }) => {
   if (source !== frame.contentWindow || origin !== 'null' || !data) return;
   if (data.type === 'ready' && !ready) {
     ready = true;
     void run(initialize, 'Could not load World Map.');
-  }
-  if (data.type === 'page' && ['practice', 'stats', 'settings'].includes(data.page)) {
-    page = data.page;
-    flushTime();
-    if (page === 'stats') void stats();
-  }
-  if (data.type === 'theme' && ['light', 'dark'].includes(data.value)) {
-    theme = data.value;
-    localStorage.setItem(themeKey, theme);
-    send({ type: 'theme', value: theme });
   }
   answer(data);
 });

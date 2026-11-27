@@ -17,7 +17,6 @@ let maxScale = 8;
 let markerCode, markerProjection, markerPosition, markerDimension;
 let markerHidden = false;
 let drawnWidth, drawnHeight;
-let page = 'practice';
 let revealed = false;
 let locked = false;
 let answerButtons = new Map();
@@ -160,58 +159,6 @@ function showQuestion(next) {
   fills();
 }
 
-function renderRows(id, rows) {
-  node(id).replaceChildren(...rows.map(values => {
-    const row = document.createElement('tr');
-    for (const value of values) {
-      const cell = document.createElement('td');
-      cell.textContent = String(value);
-      row.append(cell);
-    }
-    return row;
-  }));
-}
-
-function showStats(stats) {
-  node('summary').replaceChildren(...stats.summary.map(([label, value]) => {
-    const element = document.createElement('span');
-    element.textContent = `${label}: ${value}`;
-    return element;
-  }));
-  renderRows('country-rows', stats.countries);
-  const table = document.createElement('table');
-  const header = table.createTHead().insertRow();
-  for (const label of ['Date', 'Attempts', 'Practice time']) {
-    const cell = document.createElement('th');
-    cell.textContent = label;
-    header.append(cell);
-  }
-  for (const values of stats.history) {
-    const row = table.insertRow();
-    row.insertCell().textContent = values[0];
-    for (const [value, label, series] of [[values[1], 'Attempts', 1], [values[3], 'Practice time', 3]]) {
-      const cell = row.insertCell();
-      const meter = document.createElement('meter');
-      meter.max = Math.max(1, ...stats.history.map(item => item[series]));
-      meter.value = value;
-      meter.setAttribute('aria-label', `${label} on ${values[0]}`);
-      cell.append(series === 1 ? values[1] : values[2], meter);
-    }
-  }
-  node('history').replaceChildren(table);
-}
-
-for (const tab of document.querySelectorAll('[data-page]')) tab.onclick = () => {
-  page = tab.dataset.page;
-  for (const item of document.querySelectorAll('[data-page]')) {
-    const active = item === tab;
-    item.setAttribute('aria-pressed', String(active));
-    node(item.dataset.page).hidden = !active;
-  }
-  send({ type: 'page', page });
-};
-node('theme').onchange = () => send({ type: 'theme', value: node('theme').value });
-
 addEventListener('message', ({ source, data }) => {
   if (source !== parent || !data) return;
   switch (data.type) {
@@ -241,12 +188,6 @@ addEventListener('message', ({ source, data }) => {
       fills();
       break;
     }
-    case 'stats': showStats(data.stats); break;
-    case 'stats-error': node('summary').textContent = data.text; break;
-    case 'theme':
-      document.documentElement.dataset.theme = data.value;
-      node('theme').value = data.value;
-      break;
   }
 });
 send({ type: 'ready' });
