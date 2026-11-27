@@ -682,7 +682,7 @@ async function main() {
   const rows = [];
   await saveResults(folder, rows);
   const runId = basename(folder);
-  console.log(`Run ${runId}: open it in the evaluation dashboard (mise run views:admin)`);
+  console.log(`Run ${runId}: open it in the evaluation dashboard (mise run dev)`);
   if (!cases.length) {
     process.exitCode = 1;
     return;

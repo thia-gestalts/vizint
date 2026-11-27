@@ -1,39 +1,18 @@
 [tools]
 node = "26"
 
+[tasks.dev]
+description = "Build, then serve the site, eval dashboard and MCP endpoint (prints links and agent commands)"
+run = "scripts/dev.sh"
+
 [tasks.setup]
-description = "Install build dependencies and build Vizint"
+description = "Install dependencies and build"
 run = ["npm ci", "npm run build"]
 
-[tasks.dev]
-description = "Build and serve Vizint locally"
-depends = ["setup"]
-run = "OLYMP_ORIGIN=https://gestalter.koljasam.com npm start"
-
 [tasks.build]
-description = "Build the static Vizint site"
+description = "Build the static site"
 run = "npm run build"
-
-[tasks."views:check"]
-description = "Validate view scripts and learning links"
-run = "npm run check:views"
-
-[tasks."views:previews"]
-description = "Capture missing previews for checked-in views"
-run = "npm run previews"
 
 [tasks.gen]
 description = "Generate a draft view from a prompt with local Ollama"
 run = "node scripts/view-generation.mjs generate"
-
-[tasks."views:eval"]
-description = "Run an evaluation spec, or fixture arms from flags, with local Ollama"
-run = "node scripts/view-generation.mjs"
-
-[tasks."views:codemod-report"]
-description = "Re-check saved drafts with the typing codemod, without model calls"
-run = "node scripts/activity-codemod.mjs --report"
-
-[tasks."views:admin"]
-description = "Serve the local evaluation dashboard and agent API"
-run = "uv run --project scripts/eval-admin --locked python scripts/eval-admin/admin.py"

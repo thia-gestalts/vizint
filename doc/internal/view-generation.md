@@ -49,10 +49,10 @@ The result is one tier:
 
 A custom-brief draft counts as accepted when it starts and type-checks.
 Review a draft's code, visuals and teaching content before copying it into
-`src/views/<slug>/`. Add learning metadata, then run `mise run views:check`
+`src/views/<slug>/`. Add learning metadata, then run `npm run check:views`
 and `mise run build` before publishing.
 
-`mise run views:codemod-report` re-checks every saved draft with the current
+`node scripts/activity-codemod.mjs --report` re-checks every saved draft with the current
 codemod, without model calls. Use it after changing the codemod.
 
 ## Runs, arms and samples
@@ -94,8 +94,8 @@ patterns: [svg-plot, drag-handles, keyboard-handles, range-slider]
 Write a spec and run it, or let the CLI build one from flags:
 
 ```sh
-mise run views:eval run --spec spec.json
-mise run views:eval eval --model qwen3.5:4b --examples retrieved --samples 3
+node scripts/view-generation.mjs run --spec spec.json
+node scripts/view-generation.mjs eval --model qwen3.5:4b --examples retrieved --samples 3
 ```
 
 ```json
@@ -125,10 +125,9 @@ infrastructure failures, or from `gen` when nothing was accepted.
 
 ## Dashboard
 
-Start the dashboard with `mise run views:admin` and open the URL printed at
-startup. The default is http://127.0.0.1:8765. If that port is busy, it
-tries 8766 through 8774. Use `mise run views:admin --port 9001` to require a
-port, and use that port in the MCP URL below. The task uses uv to install
+`mise run dev` starts the dashboard alongside the site and prints its URL,
+http://127.0.0.1:8765 by default. Use `ADMIN_PORT=9001 mise run dev` for
+another port, and use that port in the MCP URL below. The task uses uv to install
 its locked Python dependencies on first run.
 
 - **Runs** lists every run, newest first, with its hypothesis, who started
@@ -230,6 +229,6 @@ packages in response to model output.
    gets this code in its prompt when the package is named or requested.
 4. Add an offline browser case to
    [`scripts/view-generation.test.mjs`](../../scripts/view-generation.test.mjs).
-   Run `node --test scripts/*.test.mjs`, `mise run views:check`, and
+   Run `node --test scripts/*.test.mjs`, `npm run check:views`, and
    `npm run build`. Try a short real generation that names the library and
    inspect its preview, bundle check, and generated `libraries` declaration.

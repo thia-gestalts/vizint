@@ -666,7 +666,7 @@ def main():
             else:
                 break
         else:
-            parser.exit(1, "Admin port unavailable. Use mise run views:admin --port PORT.\n")
+            parser.exit(1, "Admin port unavailable. Use ADMIN_PORT=PORT mise run dev.\n")
 
         security = mcp.settings.transport_security
         security.allowed_hosts = [f"{host}:{port}" for host in ("127.0.0.1", "localhost")]
