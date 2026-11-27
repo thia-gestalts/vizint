@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}{% if target %}{{ target }} · {% endif %}Authoring · Vizint{% endblock %}
+{% macro value(name) -%}
+  {{ name[:12] if name|length == 64 else name }}
+{%- endmacro %}
+{% macro metric(pair) -%}
+  {% if pair[1] %}{{ pair[0] }} <small>({{ pair[1] }})</small>{% else %}–{% endif %}
+{%- endmacro %}
+{% macro coverage(stats) %}
+  {% for contract, (passed, checked, observed) in stats.rate.items() %}
+    <div>{{ contract }} · {{ checked }}/{{ observed }} checked{% if checked %} · {{ passed }}/{{ checked }} passed{% endif %}</div>
+  {% else %}–{% endfor %}
+{% endmacro %}
+{% block content %}
+{% if target %}
+  <p><a href="{{ url_for('authoring_page') }}">Authoring</a> / {{ surface|capitalize }}</p>
+  <h1>{{ target }}</h1>
+  {% if first_pass %}<p>First observed passing revision <a href="#turn-{{ first_pass.id }}">{{ first_pass.date }}</a></p>{% endif %}
+{% else %}
+  <h1>Authoring</h1>
+  {% if not enabled %}<p>To enable automatic capture, run <code>python3 scripts/eval-admin/authoring.py setup</code> and start new client sessions.</p>{% endif %}
+  <form method="get" class="authoring-filters">
+    <label>Group by
+      <select name="group">{% for key, label in fields.items() %}<option value="{{ key }}"{% if key == group %} selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+    </label>
+    {% for key, label in fields.items() %}
+      <label>{{ label }}
+        <select name="{{ key }}"><option value="">All</option>{% for item in choices[key] %}<option value="{{ item }}"{% if filters.get(key) == item %} selected{% endif %}>{{ value(item) }}</option>{% endfor %}</select>
+      </label>
+    {% endfor %}
+    <button type="submit">Apply filters</button>
+  </form>
+  {% if turns %}
+    <h2>Last 30 days</h2>
+    <div class="authoring-table">
+      <table>
+        <thead><tr><th>{{ fields[group] }}</th><th>Turns</th><th>Views</th><th>Revision checks</th><th>Median seconds</th><th>Median input</th><th>Median output</th></tr></thead>
+        <tbody>
+          {% for name, stats in [('All matching turns', summary)] + groups %}
+            <tr><th scope="row">{{ value(name) }}</th><td>{{ stats.turns }}</td><td>{{ stats.views }}</td><td>{{ coverage(stats) }}</td>
+              <td>{{ metric(stats.seconds) }}</td><td>{{ metric(stats.input) }}</td><td>{{ metric(stats.output) }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="muted">Counts in parentheses show turns with data. A turn can appear in several groups if it used several tools or models.</p>
+  {% endif %}
+  {% if not turns %}<p>No matching authoring activity yet.</p>{% endif %}
+{% endif %}
+{% if turns %}<h2>{% if target %}Timeline{% else %}Recent turns{% endif %}</h2>{% endif %}
+{% for turn in turns %}
+  <article class="authoring-turn" id="turn-{{ turn.id }}">
+    <h3>{{ turn.date }} · {{ turn.client|capitalize }}{% if turn.models %} · {{ turn.models|join(', ') }}{% endif %}</h3>
+    <p>{{ turn.surface|capitalize }}{% if turn.efforts %} · {{ turn.efforts|join(', ') }} effort{% endif %}
+      {% if turn.linked > 1 %} · Usage shared across {{ turn.linked }} views{% endif %}
+      {% if turn.uncertain %} · Attribution uncertain{% endif %}{% if turn.origin == 'log' %} · Transcript observation{% endif %}</p>
+    {% if turn.prompt %}<blockquote>{{ turn.prompt }}</blockquote>{% endif %}
+    <ul>
+      {% for item in turn.revisions %}
+        <li>{% if target %}{{ item.target }}{% else %}<a href="{{ url_for('authoring_view', surface=turn.surface, target=item.target) }}">{{ item.target }}</a>{% endif %}
+          · {{ item.change|capitalize }}{% if item.revision %} · <code>{{ item.revision[:8] }}</code>{% endif %}
+          · {{ (item.status or 'unverified')|capitalize }}{% if item.commit_hash %} · Committed <code>{{ item.commit_hash[:8] }}</code>{% endif %}
+          {% if item.diagnostics %}<details><summary>Diagnostics</summary><ul>{% for diagnostic in item.diagnostics %}<li><pre>{{ diagnostic.message }}</pre></li>{% endfor %}</ul></details>{% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+    <div class="muted">
+      {% if turn.seconds is not none %}{{ '%.1f'|format(turn.seconds) }} s · {% endif %}
+      {% if turn.usage %}{{ turn.usage.get('input', '–') }} in · {{ turn.usage.get('output', '–') }} out{% else %}Usage unknown{% endif %}
+      {% for key, label in [('cache_read', 'cache read'), ('cache_write', 'cache write'), ('reasoning', 'reasoning')] %}
+        {% if key in turn.usage %} · {{ turn.usage[key] }} {{ label }}{% endif %}
+      {% endfor %}
+    </div>
+    {% if turn.tools %}
+      <details><summary>{{ turn.tools|length }} tool calls</summary><ul>
+        {% for tool in turn.tools.values()|sort(attribute='at') %}
+          <li>{{ tool.name or 'Unknown' }}{% if tool.status %} · {{ tool.status }}{% endif %}{% if tool.duration is defined %} · {{ '%.2f'|format(tool.duration) }} s{% endif %}
+            {% if tool.argument_bytes is defined %} · {{ tool.argument_bytes }} B in{% endif %}{% if tool.result_bytes is defined %} · {{ tool.result_bytes }} B out{% endif %}
+            {% if tool.check_status %} · Workshop check {{ tool.check_status }}{% endif %}</li>
+        {% endfor %}
+      </ul></details>
+    {% endif %}
+    {% if turn.prompt_hash or turn.instructions %}
+      <details><summary>Prompt and instruction fingerprints</summary>
+        {% if turn.prompt_hash %}<div>Prompt <code>{{ turn.prompt_hash[:12] }}</code></div>{% endif %}
+        {% for file, checksum in turn.instructions.items() %}<div>{{ file }} <code>{{ checksum[:12] }}</code></div>{% endfor %}
+      </details>
+    {% endif %}
+  </article>
+{% endfor %}
+{% endblock %}

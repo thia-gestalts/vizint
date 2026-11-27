@@ -6,6 +6,7 @@ import re
 import secrets
 import socket
 import statistics
+import threading
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,6 +21,8 @@ from starlette.applications import Starlette
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.routing import Mount, Route
 
+import authoring
+import authoring_report
 import jobs
 
 ROOT = Path(__file__).resolve().parents[2] / ".view-generation"
@@ -456,6 +459,30 @@ def render_new(form, error=None, status=200):
                            form=form or form_defaults(options, models), error=error), status
 
 
+@flask.get("/authoring")
+def authoring_page():
+    return render_authoring(**authoring_report.overview(ROOT / "authoring", request.args))
+
+
+@flask.get("/authoring/<surface>/<target>")
+def authoring_view(surface, target):
+    if surface not in ("checkout", "workshop"):
+        abort(404)
+    _, turns = authoring_report.read_activity(ROOT / "authoring", surface=surface, target=target)
+    if not turns:
+        abort(404)
+    first_pass = next((turn for turn in reversed(turns)
+                       if any(item["status"] == "pass" for item in turn["revisions"])), None)
+    return render_authoring(turns=turns, target=target, surface=surface, first_pass=first_pass)
+
+
+def render_authoring(**context):
+    response = flask.make_response(render_template("authoring.html", **context))
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Content-Security-Policy"] = "frame-ancestors 'none'"
+    return response
+
+
 @flask.get("/new")
 def new_page():
     source = None
@@ -674,7 +701,14 @@ def main():
         print(f"View evaluations: http://127.0.0.1:{port}", flush=True)
         print(f"Agent MCP endpoint: http://127.0.0.1:{port}/mcp", flush=True)
         config = uvicorn.Config(app, host="127.0.0.1", port=port)
-        uvicorn.Server(config).run(sockets=[listener])
+        stopping = threading.Event()
+        worker = threading.Thread(target=authoring.worker, args=(ROOT / "authoring", stopping), daemon=True)
+        worker.start()
+        try:
+            uvicorn.Server(config).run(sockets=[listener])
+        finally:
+            stopping.set()
+            worker.join(timeout=1)
 
 
 if __name__ == "__main__":

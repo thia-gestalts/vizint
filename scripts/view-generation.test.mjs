@@ -312,3 +312,29 @@ update();`,
     assert.equal((await read('case-1-attempt-2/result.json')).failure, 'deadline');
   });
 });
+
+test('authoring checks the captured draft without a codemod', async t => {
+  const folder = await mkdtemp(join(tmpdir(), 'vizint-authoring-check-'));
+  t.after(() => rm(folder, { recursive: true, force: true }));
+  const checker = fileURLToPath(new URL('./authoring-check.mjs', import.meta.url));
+  const files = {
+    'view.yml': 'title: Example\nintro: Try it\nframeHeight: 520px\ntype: engagement\n',
+    'activity.html': '<output id="number"></output>',
+    'activity.css': 'output { display: block; }',
+    '_frame.css': '',
+  };
+  for (const [name, content] of Object.entries(files)) await writeFile(join(folder, name), content);
+  const source = join(folder, 'activity.js');
+  const run = async code => {
+    await writeFile(source, code);
+    await exec(process.execPath, [checker, folder, 'example']);
+    assert.equal(await readFile(source, 'utf8'), code);
+    return JSON.parse(await readFile(join(folder, 'check.json'), 'utf8'));
+  };
+  const rejected = await run('document.querySelector("#number").value = "1";');
+  assert.equal(rejected.status, 'fail', rejected.diagnostics.map(item => item.message).join('\n'));
+  assert.equal(rejected.checks.type, 'fail');
+  assert.equal(rejected.checks.startup, 'pass');
+  const accepted = await run('document.querySelector("#number")?.append("1");');
+  assert.equal(accepted.status, 'pass', accepted.diagnostics.map(item => item.message).join('\n'));
+});

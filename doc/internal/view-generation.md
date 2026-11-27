@@ -232,3 +232,26 @@ packages in response to model output.
    Run `node --test scripts/*.test.mjs`, `npm run check:views`, and
    `npm run build`. Try a short real generation that names the library and
    inspect its preview, bundle check, and generated `libraries` declaration.
+
+## Everyday authoring
+
+Run `python3 scripts/eval-admin/authoring.py setup` once to add local capture
+hooks to your Codex and Claude Code settings. Start new sessions and trust
+the hooks if your client asks. Run the same command with `--disable` to
+stop collection and remove these hooks. Existing records stay on disk.
+
+Keep working in the Vizint checkout, its Git worktrees, or your local Vizint
+workshop. Capture happens even when the dashboard is closed. Open **Authoring**
+in the dashboard to process queued checkout checks and read the timeline. Workshop checks appear from the workshop's normal workflow when
+the client records them. The dashboard marks uncertain attribution and
+unknown usage explicitly.
+
+Authoring records live in `.view-generation/authoring/`. They include local
+prompt excerpts of up to 300 characters, fingerprints, usage, tool metadata,
+and captured checkout sources for queued checks. Collection starts when
+enabled. Client logs stay in their original locations. Authoring records
+are available through the local dashboard, outside the evaluation MCP API.
+
+Use the comparison filters to see how settings behave in your everyday
+workload. Its pass rates describe observed revisions with recorded checks.
+A difference in workload can explain a difference between models or tools.

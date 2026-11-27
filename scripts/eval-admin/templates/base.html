@@ -13,6 +13,7 @@
       <a class="brand" href="{{ url_for('runs_page') }}">Vizint evaluations</a>
       <a class="link" href="{{ url_for('runs_page') }}"{% if request.endpoint in ('runs_page', 'run_page', 'sample_page') %} aria-current="page"{% endif %}>Runs</a>
       <a class="link" href="{{ url_for('new_page') }}"{% if request.endpoint in ('new_page', 'create_run') %} aria-current="page"{% endif %}>New run</a>
+      <a class="link" href="{{ url_for('authoring_page') }}"{% if request.endpoint in ('authoring_page', 'authoring_view') %} aria-current="page"{% endif %}>Authoring</a>
       {% if active_job %}<a class="live" href="{{ url_for('run_page', run_id=active_job) }}">Run in progress</a>{% endif %}
     </nav>
   </header>

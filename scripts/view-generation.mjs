@@ -1,5 +1,4 @@
 import { parseArgs } from 'node:util';
-import { Script } from 'node:vm';
 import { createHash, randomInt, randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { lstat, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
@@ -8,14 +7,11 @@ import { chromium } from 'playwright-core';
 import ts from 'typescript';
 import { stringify } from 'yaml';
 import { entries } from '../src/catalog.mjs';
-import { fixActivity } from './activity-codemod.mjs';
-import { activityFrame } from './activity-frame.mjs';
-import { activityProgram } from './activity-program.mjs';
 import { readActivityScript } from './activity-script.mjs';
-import { escapeHTML } from './learning-pages.mjs';
+import { checkDraft, remaining } from './view-draft-check.mjs';
 import { fixtures } from './view-generation-fixtures.mjs';
 import { exampleModes, selectExample } from './view-examples.mjs';
-import { activityLibraries, bundleActivity, libraryCatalog, libraryNamesInBrief, libraryReferences, libraryVersion, normalizeLibraryNames, validateLibraries }
+import { activityLibraries, libraryCatalog, libraryNamesInBrief, libraryReferences, libraryVersion, normalizeLibraryNames, validateLibraries }
   from './activity-libraries.mjs';
 import { accepted, nextRepair, preferredCandidate, regressions, repairBudgetMs, repairCallLimit, repairPolicies, tierOf, tiers }
   from './view-repair-policy.mjs';
@@ -25,9 +21,9 @@ export const formats = ['fenced', 'json'];
 export const checkedIn = 'checked-in';
 export const limits = { arms: 4, samples: 5, hypothesis: 500, brief: 4000, label: 40, origin: 60, temperature: 1.5 };
 export const armDefaults = { examples: 'none', samples: 3, temperature: 0.7, repair: 'none', format: 'fenced' };
+const common = await readFile(new URL('../src/frame.css', import.meta.url), 'utf8');
 const baseOptions = { num_ctx: 8192, num_predict: 4096 };
 const endpoint = process.env.VIZINT_OLLAMA_URL ?? 'http://localhost:11434';
-const common = await readFile(new URL('../src/frame.css', import.meta.url), 'utf8');
 const runIdPattern = /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.\d{3}Z-[a-f0-9]{8}$/;
 
 const activitySchema = {
@@ -283,116 +279,6 @@ async function writeDraft(folder, draft) {
       ...(draft.libraries?.length && { libraries: draft.libraries }),
     })),
   ]);
-}
-
-function remaining(deadline, limit = 300_000) {
-  const milliseconds = Math.floor(deadline - performance.now());
-  if (milliseconds <= 0) throw new Error('Repair time budget expired');
-  return Math.min(limit, milliseconds);
-}
-
-async function checkBrowser(draft, folder, browser, fixture, checks, diagnostics, deadline) {
-  const context = await browser.newContext({
-    viewport: { width: 768, height: 520 },
-    reducedMotion: 'reduce', serviceWorkers: 'block', offline: true,
-  });
-  let timer;
-  try {
-    if (Number.isFinite(deadline)) {
-      timer = setTimeout(() => void context.close().catch(() => {}), remaining(deadline));
-    }
-    const page = await context.newPage();
-    page.setDefaultTimeout(remaining(deadline, 3000));
-    const errors = new Set();
-    page.on('pageerror', error => errors.add(error.message));
-    page.on('console', message => {
-      if (message.type() === 'error') errors.add(message.text());
-    });
-    const source = activityFrame({ ...draft, common });
-    const frame = page.frameLocator('iframe');
-    try {
-      await page.setContent(`<style>body{margin:0}iframe{display:block;width:100%;height:520px;border:0}</style>
-        <iframe sandbox="allow-scripts" srcdoc="${escapeHTML(source)}"></iframe>`);
-      await frame.locator('body').waitFor();
-      await page.locator('iframe').screenshot({ path: join(folder, 'preview.png') });
-      if (errors.size) throw new Error([...errors].join('\n'));
-      checks.startup = 'pass';
-    } catch (error) {
-      checks.startup = 'fail';
-      diagnostics.push({ stage: 'startup', message: error.message });
-      return;
-    }
-    if (fixture) {
-      try {
-        await fixture.check(frame, page);
-        if (errors.size) throw new Error([...errors].join('\n'));
-        checks.fixture = 'pass';
-      } catch (error) {
-        checks.fixture = 'fail';
-        diagnostics.push({ stage: 'fixture', message: error.message });
-      }
-    }
-  } finally {
-    clearTimeout(timer);
-    await context.close();
-  }
-}
-
-async function checkDraft(draft, folder, browser, fixture, result, deadline) {
-  const { checks, diagnostics } = result;
-  const filename = join(folder, 'activity.js');
-  const libraries = draft.libraries ?? [];
-  const fixed = fixActivity({ markup: draft.markup, code: draft.code, libraries }, filename);
-  checks.typeErrorsRaw = fixed.before;
-  result.codemod = fixed.fixes;
-  if (fixed.code !== draft.code) {
-    await writeFile(join(folder, 'activity.raw.js'), draft.code);
-    await writeFile(filename, fixed.code);
-    draft.code = fixed.code;
-  }
-  const types = ts.getPreEmitDiagnostics(activityProgram(filename, draft.code, libraries))
-    .filter(item => item.category === ts.DiagnosticCategory.Error);
-  checks.typeErrors = types.length;
-  checks.type = types.length ? 'fail' : 'pass';
-  checks.typeCodes = [...new Set(types.map(item => item.code))].sort((a, b) => a - b);
-  const format = { getCanonicalFileName: file => file, getCurrentDirectory: () => folder, getNewLine: () => '\n' };
-  let code = draft.code;
-  if (libraries.length) {
-    try {
-      code = await bundleActivity({ filename, source: code, libraries });
-      checks.bundle = 'pass';
-    } catch (error) {
-      checks.bundle = 'fail';
-      diagnostics.push({ stage: 'bundle', message: error.message });
-    }
-  }
-  try {
-    if (checks.bundle !== 'fail') new Script(code, { filename: 'activity.js' });
-    if (checks.bundle !== 'fail') checks.syntax = 'pass';
-  } catch (error) {
-    checks.syntax = 'fail';
-    const location = error.stack.split('\n').slice(0, 3).join('\n');
-    if (!libraries.length && /Cannot use import statement outside a module/i.test(error.message)) {
-      diagnostics.push({ stage: 'bundle', message: 'Static imports require declaring the imported package in libraries.', location });
-    } else {
-      diagnostics.push({ stage: 'syntax', message: error.message, location });
-    }
-  }
-  if (checks.syntax === 'pass') {
-    await checkBrowser({ ...draft, code }, folder, browser, fixture, checks, diagnostics, deadline);
-    checks.browser = checks.startup === 'pass' && checks.fixture !== 'fail' ? 'pass' : 'fail';
-  }
-  for (const typeCode of checks.typeCodes) {
-    const group = types.filter(item => item.code === typeCode);
-    diagnostics.push({
-      stage: 'type', code: typeCode, count: group.length,
-      message: ts.formatDiagnostics(group.slice(0, 2), format).trim(),
-    });
-  }
-  return [
-    ...diagnostics.filter(item => item.stage !== 'type').map(item => item.message),
-    ts.formatDiagnostics(types, format).trim(),
-  ].filter(Boolean).join('\n');
 }
 
 async function readView(slug) {
@@ -660,14 +546,14 @@ async function main() {
     new URL('./activity-libraries.mjs', import.meta.url), new URL('../package-lock.json', import.meta.url),
     ...Object.keys(activityLibraries).map(name => new URL(`./activity-library-examples/${name}.js`, import.meta.url)),
     new URL('./view-generation-fixtures.mjs', import.meta.url), new URL('./activity-codemod.mjs', import.meta.url),
-    new URL('./activity-frame.mjs', import.meta.url), new URL('./activity-program.mjs', import.meta.url),
+    new URL('./view-draft-check.mjs', import.meta.url), new URL('./activity-frame.mjs', import.meta.url), new URL('./activity-program.mjs', import.meta.url),
   ].map(url => readFile(new URL(url))));
   const fingerprint = createHash('sha256');
   for (const source of sources) fingerprint.update(source).update('\0');
   const runnerHash = fingerprint.update(common).digest('hex');
   const checks = createHash('sha256');
   for (const source of sources.slice(3)) checks.update(source).update('\0');
-  const checkHash = checks.update(common).update(checkDraft.toString()).update(checkBrowser.toString()).digest('hex');
+  const checkHash = checks.update(common).digest('hex');
   const status = git(['status', '--porcelain']);
   const metadata = {
     command: 'run', runnerHash, checkHash,
