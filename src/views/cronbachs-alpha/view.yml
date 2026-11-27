@@ -1,0 +1,30 @@
+title: Cronbach’s alpha
+intro: Change how six people answer four survey items and watch Cronbach’s alpha
+  respond. Try reverse-scoring the opposing item and see what happens to the
+  spread of the total scores.
+type: engagement
+frameHeight: 31rem
+previewReady: '#responses select'
+patterns: [editable-table, presets, bar-chart, live-readout]
+learning:
+  records:
+    - kind: topic
+      name: Cronbach’s alpha
+    - kind: fact
+      key: cronbachs-alpha/variance
+      statement: With the same item variances, Cronbach’s alpha rises as the
+        variance of the total scores increases.
+    - kind: question
+      id: f8a9ccee-3e21-4780-afa7-14c61b8a9a68
+      text: How can rearranging responses within one item change Cronbach’s alpha?
+  topicLinks:
+    - subject: {kind: topic, name: Cronbach’s alpha}
+      relation: within
+      object: {kind: topic, name: statistics}
+  topics:
+    - target: {kind: topic, name: Cronbach’s alpha}
+      weight: 1
+  teaches:
+    - target: {kind: fact, key: cronbachs-alpha/variance}
+  answers:
+    - target: {kind: question, id: f8a9ccee-3e21-4780-afa7-14c61b8a9a68}

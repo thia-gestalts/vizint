@@ -1,0 +1,65 @@
+<main>
+  <div class="controls">
+    <div class="presets" role="group" aria-label="Response presets">
+      <button type="button" data-preset="aligned" aria-pressed="true">Aligned</button>
+      <button type="button" data-preset="mixed" aria-pressed="false">Mixed</button>
+      <button type="button" data-preset="opposing" aria-pressed="false">Opposing D</button>
+    </div>
+    <label class="reverse"><input id="reverse" type="checkbox"> Reverse-score D (1 ↔ 5)</label>
+  </div>
+
+  <div class="workspace">
+    <section aria-labelledby="responses-title">
+      <h2 id="responses-title">Survey responses</h2>
+      <p class="hint">Edit any scored response on the 1–5 scale.</p>
+      <table aria-labelledby="responses-title">
+        <thead>
+          <tr>
+            <th scope="col">Person</th>
+            <th scope="col" aria-label="Item A">A</th>
+            <th scope="col" aria-label="Item B">B</th>
+            <th scope="col" aria-label="Item C">C</th>
+            <th scope="col" aria-label="Item D">D</th>
+            <th scope="col">Total <small>/ 20</small></th>
+          </tr>
+        </thead>
+        <tbody id="responses"></tbody>
+        <tfoot>
+          <tr>
+            <th scope="row">Variance</th>
+            <td></td><td></td><td></td><td></td><td></td>
+          </tr>
+        </tfoot>
+      </table>
+    </section>
+
+    <section class="analysis" aria-labelledby="alpha-title">
+      <h2 id="alpha-title">Cronbach’s α</h2>
+      <div role="status" aria-labelledby="alpha-title" aria-atomic="true">
+        <strong id="alpha"></strong>
+        <p id="interpretation"></p>
+      </div>
+
+      <figure aria-label="Variance comparison">
+        <div class="variance">
+          <div>Sum of item variances <strong id="item-variance"></strong></div>
+          <div class="track" aria-hidden="true"><span id="item-bar"></span></div>
+        </div>
+        <div class="variance">
+          <div>Variance of total scores <strong id="total-variance"></strong></div>
+          <div class="track" aria-hidden="true"><span id="total-bar"></span></div>
+        </div>
+        <div class="axis" aria-hidden="true"><span>0</span><span id="axis-end"></span></div>
+      </figure>
+
+      <math display="block" aria-label="Alpha equals k over k minus one, times one minus the sum of item variances divided by the variance of total scores">
+        <mi>α</mi><mo>=</mo><mfrac><mi>k</mi><mrow><mi>k</mi><mo>−</mo><mn>1</mn></mrow></mfrac>
+        <mo>(</mo><mn>1</mn><mo>−</mo>
+        <mfrac><mtext>sum of item variances</mtext><mtext>variance of totals</mtext></mfrac><mo>)</mo>
+      </math>
+      <p class="formula-note"><i>k</i> is the number of items (here, 4).</p>
+    </section>
+  </div>
+
+  <p class="takeaway">The presets rearrange the same ratings for item D. Compare the variance of the totals while each item’s variance stays fixed.</p>
+</main>
