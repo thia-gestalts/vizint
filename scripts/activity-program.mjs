@@ -1,5 +1,10 @@
 import ts from 'typescript';
+import { dirname, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+const runtime = fileURLToPath(new URL('../src/runtime/index.js', import.meta.url));
+// Packages that only provide types, so a view may import types from them.
+const typeOnly = ['geojson'];
 
 const options = {
   allowJs: true,
@@ -9,27 +14,34 @@ const options = {
   target: ts.ScriptTarget.ES2022,
   lib: ['lib.es2022.d.ts', 'lib.dom.d.ts', 'lib.dom.iterable.d.ts'],
   types: [],
+  module: ts.ModuleKind.ESNext,
+  moduleResolution: ts.ModuleResolutionKind.Bundler,
+  allowImportingTsExtensions: true,
 };
 
-function settingsFor(libraries) {
-  return libraries.length ? {
-    ...options, module: ts.ModuleKind.ESNext, moduleResolution: ts.ModuleResolutionKind.Bundler,
-  } : options;
-}
-
+// The same imports the bundler allows: the runtime, declared libraries, and
+// modules inside the view's own folder.
 function resolver(filename, libraries, settings, host) {
   const anchor = fileURLToPath(new URL('../package.json', import.meta.url));
+  const folder = dirname(filename) + sep;
   return (imports, containingFile) => imports.map(name => {
-    if (containingFile === filename && !libraries.includes(name)) return undefined;
-    const directoryAnchor = containingFile === filename ? anchor : containingFile;
-    return ts.resolveModuleName(name, directoryAnchor, settings, host).resolvedModule;
+    if (containingFile !== filename && !containingFile.startsWith(folder)) {
+      return ts.resolveModuleName(name, containingFile, settings, host).resolvedModule;
+    }
+    if (name === 'vizint') return { resolvedFileName: runtime, extension: ts.Extension.Js, isExternalLibraryImport: false };
+    if (name.startsWith('.')) {
+      const resolved = ts.resolveModuleName(name, containingFile, settings, host).resolvedModule;
+      return resolved?.resolvedFileName.startsWith(folder) ? resolved : undefined;
+    }
+    if (!libraries.includes(name) && !typeOnly.includes(name)) return undefined;
+    return ts.resolveModuleName(name, anchor, settings, host).resolvedModule;
   });
 }
 
 export function activityProgram(filename, source, libraries = []) {
-  const settings = settingsFor(libraries);
+  const settings = options;
   const host = ts.createCompilerHost(settings);
-  if (libraries.length) host.resolveModuleNames = resolver(filename, libraries, settings, host);
+  host.resolveModuleNames = resolver(filename, libraries, settings, host);
   const getSourceFile = host.getSourceFile;
   host.getSourceFile = (file, ...args) => file === filename
     ? ts.createSourceFile(file, source, options.target)
@@ -40,7 +52,7 @@ export function activityProgram(filename, source, libraries = []) {
 
 /** A language service over one in-memory activity file, for code fixes. */
 export function activityLanguageService(filename, source, libraries = []) {
-  const settings = settingsFor(libraries);
+  const settings = options;
   let text = source;
   let version = 0;
   const base = ts.createCompilerHost(settings);
@@ -61,7 +73,7 @@ export function activityLanguageService(filename, source, libraries = []) {
     directoryExists: ts.sys.directoryExists,
     getDirectories: ts.sys.getDirectories,
   };
-  if (libraries.length) host.resolveModuleNames = resolver(filename, libraries, settings, base);
+  host.resolveModuleNames = resolver(filename, libraries, settings, base);
   const service = ts.createLanguageService(host, ts.createDocumentRegistry());
   return {
     service,

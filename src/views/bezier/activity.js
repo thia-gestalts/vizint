@@ -1,3 +1,5 @@
+import { engage } from 'vizint';
+
 /** @typedef {[x: number, y: number]} Point */
 
 /** @type {Point[]} */
@@ -22,7 +24,6 @@ const markers = ['level-one', 'level-one', 'level-one', 'level-two', 'level-two'
 });
 /** @type {{ id: number, start: DOMPoint, original: Point, moved: boolean } | undefined} */
 let drag;
-let engaged = false;
 
 /** @param {number} t */
 function levelsAt(t) {
@@ -71,11 +72,6 @@ function draw() {
   place(curvePoint, at);
 }
 
-function engage() {
-  if (engaged) return;
-  engaged = true;
-  parent.postMessage({ type: 'control-point-moved' }, '*');
-}
 
 /**
  * @param {number} index

@@ -3,7 +3,7 @@ import { parse } from 'yaml';
 import { nameId } from '../../name-id.mjs';
 import { languages as packs } from './languages.mjs';
 
-export default function minimalPairsEntry(app) {
+export default function minimalPairsEntry(app, { datasets }) {
   const { languages } = parse(readFileSync(new URL('learning.yml', import.meta.url), 'utf8'));
   const records = [];
   const topics = [];
@@ -12,6 +12,8 @@ export default function minimalPairsEntry(app) {
   const link = ({ kind, id }) => ({ target: { kind, id } });
 
   for (const [code, { name, topic, within = [], tones }] of Object.entries(languages)) {
+    const dataset = datasets.speech.find(({ meta }) => meta.language === code);
+    if (!dataset) throw new Error(`No speech dataset for ${code}`);
     const topicRecord = { kind: 'topic', id: nameId(topic), name: topic };
     for (const broader of within) {
       topicLinks.push({ subject: link(topicRecord).target, relation: 'within', object: { kind: 'topic', id: nameId(broader) } });
@@ -28,7 +30,7 @@ export default function minimalPairsEntry(app) {
       name: `Distinguish ${tones[first]} and ${tones[second]} in ${name} speech`,
     })));
     records.push(...skills);
-    exercises.push({ id: code, title: `Practice ${name} tones`, topics: [link(topicRecord)],
+    exercises.push({ id: code, title: `Practice ${name} tones`, dataset: { slot: 'speech', id: dataset.id }, topics: [link(topicRecord)],
       practices: skills.map(link), assesses: skills.map(link) });
   }
 

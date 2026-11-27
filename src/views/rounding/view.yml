@@ -6,7 +6,7 @@ title: Rounding to the nearest tenth
 intro: Choose the value rounded to one decimal place. The hundredths digit tells
   you whether to round up.
 type: attempt
-patterns: [host-questions, multiple-choice, feedback]
+patterns: [generated-questions, multiple-choice, feedback]
 source: Exercise format inspired by Stembridge’s rounding drills (CC BY 4.0).
 learning:
   records:

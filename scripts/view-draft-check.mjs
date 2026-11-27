@@ -84,14 +84,12 @@ export async function checkDraft(draft, folder, browser, fixture, result, deadli
   checks.typeCodes = [...new Set(types.map(item => item.code))].sort((a, b) => a - b);
   const format = { getCanonicalFileName: file => file, getCurrentDirectory: () => folder, getNewLine: () => '\n' };
   let code = draft.code;
-  if (libraries.length) {
-    try {
-      code = await bundleActivity({ filename, source: code, libraries });
-      checks.bundle = 'pass';
-    } catch (error) {
-      checks.bundle = 'fail';
-      diagnostics.push({ stage: 'bundle', message: error.message });
-    }
+  try {
+    code = await bundleActivity({ filename, source: code, libraries });
+    checks.bundle = 'pass';
+  } catch (error) {
+    checks.bundle = 'fail';
+    diagnostics.push({ stage: 'bundle', message: error.message });
   }
   try {
     if (checks.bundle !== 'fail') new Script(code, { filename: 'activity.js' });
@@ -99,11 +97,7 @@ export async function checkDraft(draft, folder, browser, fixture, result, deadli
   } catch (error) {
     checks.syntax = 'fail';
     const location = error.stack.split('\n').slice(0, 3).join('\n');
-    if (!libraries.length && /Cannot use import statement outside a module/i.test(error.message)) {
-      diagnostics.push({ stage: 'bundle', message: 'Static imports require declaring the imported package in libraries.', location });
-    } else {
-      diagnostics.push({ stage: 'syntax', message: error.message, location });
-    }
+    diagnostics.push({ stage: 'syntax', message: error.message, location });
   }
   if (checks.syntax === 'pass') {
     await checkBrowser({ ...draft, code }, folder, browser, fixture, checks, diagnostics, deadline);

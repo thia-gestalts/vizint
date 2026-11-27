@@ -4,8 +4,9 @@
  * @param {number[]} values
  * @param {number} units
  * @param {() => void} draw
+ * @param {() => void} onEngage Called once, when the learner first moves a point.
  */
-function bindVerticalPointDrag(plot, handles, values, units, draw) {
+function bindVerticalPointDrag(plot, handles, values, units, draw, onEngage) {
   /** @type {Partial<Record<string, number>>} */
   const steps = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1 };
   /** @type {Partial<Record<string, number>>} */
@@ -25,7 +26,7 @@ function bindVerticalPointDrag(plot, handles, values, units, draw) {
     draw();
     if (!engaged) {
       engaged = true;
-      parent.postMessage({ type: 'control-point-moved' }, '*');
+      onEngage();
     }
   }
 

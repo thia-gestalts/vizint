@@ -1,7 +1,6 @@
 import { activityFrame } from './activity-frame.mjs';
 import { bundleActivity, libraryStyles } from './activity-libraries.mjs';
-import { build } from 'esbuild';
-import { fileURLToPath } from 'node:url';
+import { datasetStore } from './datasets.mjs';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
@@ -117,35 +116,73 @@ await cp(new URL(vendor, root), new URL('schemas/', output), { recursive: true }
 await cp(new URL('LICENSE', lucide), new URL('lucide-license.txt', output));
 await writeLearningPages({ output, page, entries, graph });
 
+// Every pack is published once under its hash. Small ones also travel inside
+// the views that use them, up to a per-view budget.
+const inlineBudget = Number(process.env.VIZINT_INLINE_BUDGET ?? 1024 * 1024);
+const publicOrigin = process.env.VIZINT_PUBLIC_ORIGIN;
+const packFiles = new Map();
+async function publishPack(id) {
+  if (!packFiles.has(id)) {
+    packFiles.set(id, (async () => {
+      const pack = await datasetStore.packDataset(id);
+      const name = `${id}.${pack.hash.slice(0, 16)}.vzpk`;
+      await mkdir(new URL('datasets/', output), { recursive: true });
+      await writeFile(new URL(`datasets/${name}`, output), pack.bytes);
+      return { ...pack, name };
+    })());
+  }
+  return packFiles.get(id);
+}
+
+async function viewDatasets(entry) {
+  const ids = [...new Set(Object.values(entry.datasets).flatMap(slot => slot.options))];
+  const packs = new Map(await Promise.all(ids.map(async id => [id, await publishPack(id)])));
+  const inline = new Set();
+  let remaining = inlineBudget;
+  for (const id of [...ids].sort((a, b) => packs.get(a).size - packs.get(b).size)) {
+    if (packs.get(id).size > remaining) break;
+    inline.add(id);
+    remaining -= packs.get(id).size;
+  }
+  const option = id => {
+    const { title, kind, source, sourceUrl, license, licenseUrl, notice } = datasetStore.get(id);
+    const { hash, name } = packs.get(id);
+    return {
+      id, title, kind, hash, source, sourceUrl, license, licenseUrl, notice,
+      inline: inline.has(id) ? `vizint-pack-${hash}` : undefined,
+      sources: [`../datasets/${name}`, ...(publicOrigin ? [new URL(`datasets/${name}`, publicOrigin).href] : [])],
+    };
+  };
+  return {
+    slots: Object.fromEntries(Object.entries(entry.datasets).map(([name, slot]) =>
+      [name, { label: slot.label, kind: slot.kind, options: slot.options.map(option) }])),
+    packs: [...inline].map(id => ({ id: `vizint-pack-${packs.get(id).hash}`, base64: packs.get(id).bytes.toString('base64') })),
+    remote: ids.some(id => !inline.has(id)),
+  };
+}
+
+const events = new Map(graph.eventEntries.map(item => [item.slug, item]));
 for (const entry of entries) {
   const { slug, activity, title, intro, source, frameHeight, learning, type } = entry;
   const exercises = learning?.exercises ?? [];
-  const activeExercise = !entry.customHost && type === 'attempt' ? exercises[0] : undefined;
+  const activeExercise = type === 'attempt' && exercises.length === 1 ? exercises[0] : undefined;
   const links = graph.byActivity.get(activity);
   const markup = await read(`src/views/${slug}/activity.html`);
-  const bundle = async (filename, format, external = []) => (await build({
-    entryPoints: [fileURLToPath(new URL(`src/views/${slug}/${filename}`, root))],
-    bundle: true, format, external, write: false, minify: true, legalComments: 'inline',
-  })).outputFiles[0].text;
-  let code;
-  if (entry.libraries?.length) {
-    const { source, parts } = await readActivityScript(entry);
-    code = await bundleActivity({ filename: parts.at(-1).file, source, libraries: entry.libraries });
-  } else {
-    code = entry.customHost ? await bundle('activity.js', 'iife') : (await readActivityScript(entry)).source;
-  }
+  const { parts, source: script } = await readActivityScript(entry);
+  const code = await bundleActivity({ filename: parts.at(-1).file, source: script, libraries: entry.libraries ?? [] });
   const styles = await read(`src/views/${slug}/activity.css`);
   const common = await read('src/frame.css');
-  const frame = activityFrame({
-    title, common, libraryStyles: await libraryStyles(entry.libraries), styles, markup, code, media: entry.media,
-  });
+  const data = await viewDatasets(entry);
+  const { targets, defaults } = events.get(slug);
+  const context = { protocol: 1, app, activity, type, targets, defaults, datasets: data.slots };
+  const connect = data.remote ? ["'self'", ...(publicOrigin ? [new URL(publicOrigin).origin] : [])] : [];
   const path = new URL(`${slug}/`, output);
   await mkdir(path);
-  const folder = new URL(`src/views/${slug}/`, root);
-  if (entry.preview) await cp(new URL('preview.png', folder), new URL('preview.png', path));
-  if (!entry.customHost && type === 'attempt') await cp(new URL('questions.mjs', folder), new URL('questions.mjs', path));
-  if (entry.assets) await cp(new URL(`src/views/${slug}/${entry.assets}/`, root), new URL(`${entry.assets}/`, path), { recursive: true });
-  if (entry.customHost) await writeFile(new URL('host.mjs', path), await bundle('host.mjs', 'esm', ['../catalog.mjs', '../storage.mjs']));
+  await writeFile(new URL('view.html', path), activityFrame({
+    title, common, libraryStyles: await libraryStyles(entry.libraries), styles, markup, code, media: entry.media,
+    context, packs: data.packs, connect,
+  }));
+  if (entry.preview) await cp(new URL(`src/views/${slug}/preview.png`, root), new URL('preview.png', path));
   await writeFile(new URL('index.html', path), page(`${title} | Vizint`, '../', `
     <div class="flex flex-wrap items-center gap-2">
       <a class="btn btn-ghost btn-sm -ml-2" href="../">${icon('arrow-left')} All activities</a>
@@ -153,7 +190,7 @@ for (const entry of entries) {
     </div>
     <h1 class="mt-3 text-3xl leading-tight font-semibold tracking-tight sm:text-5xl">${escapeHTML(title)}</h1>
     <p class="mt-3 max-w-prose leading-relaxed text-base-content/75">${escapeHTML(intro)}</p>
-    <template id="activity-template"><iframe class="block w-full rounded-xl border border-base-300 bg-base-100" style="height: ${escapeHTML(frameHeight)}" title="${escapeHTML(title)}" sandbox="allow-scripts" srcdoc="${escapeHTML(frame)}"></iframe></template>
+    <template id="activity-template"><iframe class="block w-full rounded-xl border border-base-300 bg-base-100" style="height: ${escapeHTML(frameHeight)}" title="${escapeHTML(title)}" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"></iframe></template>
     <div class="mt-6"${activeExercise ? ` id="${exerciseAnchor(activeExercise)}"` : ''}>
       <div id="activity" data-entry="${slug}"></div>
     </div>
@@ -171,7 +208,7 @@ for (const entry of entries) {
         ${details}
       </section>`;
     }).join('')}
-    ${source ? `<footer class="mt-5 text-sm text-base-content/75">${escapeHTML(source)}</footer>` : ''}`,  `<script type="module" src="${entry.customHost ? './' : '../'}host.mjs"></script>`));
+    ${source ? `<footer class="mt-5 text-sm text-base-content/75">${escapeHTML(source)}</footer>` : ''}`, '<script type="module" src="../host.mjs"></script>'));
 }
 
 await writeFile(new URL('index.html', output), page('Vizint', '', `

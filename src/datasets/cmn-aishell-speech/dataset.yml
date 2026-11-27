@@ -1,0 +1,10 @@
+title: Mandarin
+kind: tone-speech
+source: AISHELL-1
+sourceUrl: https://huggingface.co/datasets/AISHELL/AISHELL-1
+license: Apache License 2.0
+licenseUrl: https://www.apache.org/licenses/LICENSE-2.0
+notice: Recordings by Beijing Shell Shell Technology Co., Ltd. This activity uses curated MP3 clips with
+  pinyin transcriptions. The dataset is tagged Apache 2.0 and its description specifies academic use.
+meta:
+  language: cmn

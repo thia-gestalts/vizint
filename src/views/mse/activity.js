@@ -1,3 +1,5 @@
+import { engage } from 'vizint';
+
 const prediction = 5;
 const baseline = 198;
 const units = 16;
@@ -22,5 +24,5 @@ function draw() {
   calculation.value = `(${squares.join(' + ')}) ÷ ${values.length} ${result}`;
 }
 
-bindVerticalPointDrag(plot, handles, values, units, draw);
+bindVerticalPointDrag(plot, handles, values, units, draw, engage);
 draw();

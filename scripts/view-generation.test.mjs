@@ -95,11 +95,14 @@ test('retrieval excludes the fixture view and falls back to term overlap', async
   assert.ok(held.results.every(result => result.slug !== 'bezier'));
 });
 
-test('bundler rejects undeclared direct imports and local paths', async () => {
-  const filename = '/tmp/vizint-activity.js';
-  for (const source of ["import { Scene } from 'three';", "import './private.js';"]) {
-    await assert.rejects(bundleActivity({ filename, source, libraries: ['d3'] }), /Activity import .* is unavailable/);
-  }
+test('bundler rejects undeclared imports and paths outside the view folder', async () => {
+  const filename = '/tmp/vizint-view/activity.js';
+  await assert.rejects(bundleActivity({ filename, source: "import { Scene } from 'three';", libraries: ['d3'] }),
+    /Activity import .* is unavailable/);
+  await assert.rejects(bundleActivity({ filename, source: "import '../private.js';", libraries: [] }),
+    /outside its view folder/);
+  const code = await bundleActivity({ filename, source: "import { engage } from 'vizint';\nengage();", libraries: [] });
+  assert.match(code, /learning-event/);
 });
 
 test('local runner with a mock Ollama server', async t => {

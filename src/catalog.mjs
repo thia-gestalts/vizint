@@ -1,11 +1,12 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { parse } from 'yaml';
-import { validateLibraries } from '../scripts/activity-libraries.mjs';
+import { validateLibraries, viewLibraries } from '../scripts/activity-libraries.mjs';
+import { datasetStore, datasets } from '../scripts/datasets.mjs';
 import { nameId } from './name-id.mjs';
 
 export const app = 'example.thia.vizint';
 
-const fields = 'order activity title intro type frameHeight source sharedScript libraries previewReady previewHash patterns customHost media assets collapseExercises learning learningModule'.split(' ');
+const fields = 'order activity title intro type frameHeight source sharedScript libraries previewReady previewHash patterns media datasets collapseExercises learning learningModule'.split(' ');
 const relations = 'topics teaches answers prerequisites practices assesses'.split(' ');
 const segment = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -47,6 +48,25 @@ function learning(data, exercise = false) {
   }));
 }
 
+// A slot names the datasets a view can show; the first option is the default.
+function datasetSlots(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Expected a datasets mapping');
+  return Object.fromEntries(Object.entries(value).map(([name, slot]) => {
+    if (!segment.test(name)) throw new Error(`Invalid dataset slot name ${name}`);
+    exactFields(slot, ['kind', 'label', 'options'], 'dataset slot');
+    if (typeof slot.label !== 'string' || !slot.label.trim()) throw new Error(`Expected a label for dataset slot ${name}`);
+    if (!Array.isArray(slot.options) || !slot.options.length || new Set(slot.options).size !== slot.options.length) {
+      throw new Error(`Expected unique options for dataset slot ${name}`);
+    }
+    for (const id of slot.options) {
+      const dataset = datasets.get(id);
+      if (!dataset) throw new Error(`Unknown dataset ${id} in slot ${name}`);
+      if (dataset.kind !== slot.kind) throw new Error(`Dataset ${id} is a ${dataset.kind}, not a ${slot.kind}`);
+    }
+    return [name, { kind: slot.kind, label: slot.label, options: slot.options }];
+  }));
+}
+
 export async function loadCatalog(root = new URL('views/', import.meta.url)) {
   const loaded = await Promise.all(readdirSync(root, { withFileTypes: true }).filter(item => item.isDirectory()).map(async ({ name: slug }) => {
     const folder = new URL(slug + '/', root);
@@ -68,35 +88,40 @@ export async function loadCatalog(root = new URL('views/', import.meta.url)) {
       }
       if (!['attempt', 'engagement'].includes(data.type)) throw new Error('Invalid activity type');
       for (const file of ['activity.html', 'activity.css', 'activity.js']) requirePath(file);
-      for (const field of ['customHost', 'media', 'collapseExercises']) {
+      for (const field of ['media', 'collapseExercises']) {
         if (field in data && typeof data[field] !== 'boolean') throw new Error(`Expected a boolean ${field}`);
       }
-      if (data.customHost) requirePath('host.mjs');
-      else if (data.type === 'attempt') requirePath('questions.mjs');
-      if ('libraries' in data) validateLibraries(data.libraries);
+      if ('libraries' in data) validateLibraries(data.libraries, viewLibraries);
+      const slots = 'datasets' in data ? datasetSlots(data.datasets) : {};
       if ('patterns' in data && (!Array.isArray(data.patterns) || new Set(data.patterns).size !== data.patterns.length ||
           data.patterns.some(pattern => typeof pattern !== 'string' || !segment.test(pattern)))) {
         throw new Error('Expected patterns to be unique kebab-case strings');
-      }
-      if ('assets' in data) {
-        if (!segment.test(data.assets) || typeof data.assets !== 'string') throw new Error('Invalid assets directory');
-        requirePath(data.assets + '/', true);
       }
       if ('sharedScript' in data) {
         if (typeof data.sharedScript !== 'string' || !/^src\/[\w-]+\.js$/.test(data.sharedScript)) throw new Error('Invalid sharedScript path');
         requirePath(data.sharedScript, false, new URL('../', import.meta.url));
       }
-      const { order, activity = slug, learningModule, learning: authored, ...entry } = data;
+      const { order, activity = slug, learningModule, learning: authored, datasets: _, ...entry } = data;
       if (order !== undefined && !Number.isFinite(order)) throw new Error('Invalid order');
       if (learningModule !== undefined && (learningModule !== 'content.mjs' || authored !== undefined)) {
         throw new Error('Use either learning or learningModule: content.mjs');
       }
       if (learningModule) requirePath(learningModule);
       const content = learningModule
-        ? await (await import(new URL(learningModule, folder))).default(app)
+        ? await (await import(new URL(learningModule, folder))).default(app, {
+          datasets: Object.fromEntries(Object.entries(slots).map(([name, slot]) =>
+            [name, slot.options.map(id => datasetStore.describe(id))])),
+        })
         : learning(authored ?? {});
+      for (const exercise of content.exercises ?? []) {
+        if (!exercise.dataset) continue;
+        exactFields(exercise.dataset, ['slot', 'id'], 'exercise dataset');
+        if (!slots[exercise.dataset.slot]?.options.includes(exercise.dataset.id)) {
+          throw new Error(`Exercise ${exercise.id} names an undeclared dataset`);
+        }
+      }
       const preview = statSync(new URL('preview.png', folder), { throwIfNoEntry: false })?.isFile() ?? false;
-      return { order: order ?? Infinity, entry: { slug, activity, ...entry, preview, learning: content } };
+      return { order: order ?? Infinity, entry: { slug, activity, ...entry, datasets: slots, preview, learning: content } };
     } catch (error) {
       throw new Error(`${manifest.pathname}: ${error.message}`, { cause: error });
     }

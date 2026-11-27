@@ -6,6 +6,7 @@
     "build": "node scripts/build.mjs && tailwindcss -i src/site.css -o dist/site.css --minify",
     "previews": "node scripts/capture-previews.mjs",
     "check:views": "node scripts/check-views.mjs",
+    "check:standalone": "node scripts/check-standalone.mjs",
     "start": "node scripts/serve.mjs",
     "learning": "node scripts/learning.mjs",
     "views:local": "node scripts/view-generation.mjs"

@@ -8,9 +8,12 @@ import { activityLearning } from './learning-pages.mjs';
 const common = JSON.parse(readFileSync(new URL('../vendor/thia-gestalts/common/v2.json', import.meta.url)));
 const view = (catalog, slug) => catalog.find((entry) => entry.slug === slug);
 
-test('learner events use directly addressed topics and exercise assessments', () => {
+const defaultNames = (graph, slug) => view(graph.eventEntries, slug).defaults
+  .map((id) => [...graph.records.values()].find((record) => record.id === id).name);
+
+test('learner events default to directly addressed topics and exercise assessments', () => {
   const catalog = structuredClone(entries);
-  const getTargets = (slug) => view(buildLearningGraph(catalog, common, topics).eventEntries, slug).targets;
+  const getTargets = (slug) => defaultNames(buildLearningGraph(catalog, common, topics), slug).map((name) => ({ name }));
   assert.deepEqual(getTargets('mse').map(({ name }) => name), ['Mean Squared Error', 'Squared Error']);
   assert.deepEqual(getTargets('rounding').map(({ name }) => name), [
     'Round to the nearest tenth', 'Rounding', 'Decimal Place Value',
@@ -49,7 +52,8 @@ test('questions are indexed and can be answered at exercise scope', () => {
   const links = graph.backlinks.get(`question:${question.id}`);
   assert.deepEqual(links.map(({ exercise }) => exercise?.id), [undefined, 'nearest-tenth']);
   assert.match(activityLearning(graph.byActivity.get(rounding.activity), exercise), /Questions answered/);
-  assert.ok(!view(graph.eventEntries, 'rounding').targets.includes(question));
+  assert.ok(!view(graph.eventEntries, 'rounding').defaults.includes(question.id));
+  assert.ok(view(graph.eventEntries, 'rounding').targets.some(({ id }) => id === question.id));
 });
 
 test('zero-weight links remain in the graph while unrated links still render', () => {
@@ -61,7 +65,15 @@ test('zero-weight links remain in the graph while unrated links still render', (
   const markup = activityLearning(graph.byActivity.get(mse.activity));
   assert.doesNotMatch(markup, />Mean Squared Error</);
   assert.match(markup, />Squared Error</);
-  assert.equal(view(graph.eventEntries, 'mse').targets.length, 2);
+  assert.equal(view(graph.eventEntries, 'mse').defaults.length, 2);
+});
+
+test('a view may report any target it declares or links, and nothing else', () => {
+  const graph = buildLearningGraph(structuredClone(entries), common, topics);
+  const worldMap = view(graph.eventEntries, 'world-map');
+  assert.ok(worldMap.targets.some(({ id }) => id.endsWith(':world-map/country/ken')));
+  assert.ok(!worldMap.targets.some(({ name }) => name === 'Rounding'));
+  assert.deepEqual(worldMap.defaults, []);
 });
 
 const topicId = (graph, name) => `topic:${[...graph.records.values()].find((record) => record.name === name).id}`;

@@ -1,4 +1,5 @@
 import katex from 'katex';
+import { engage } from 'vizint';
 
 const left = 56;
 const right = 620;
@@ -31,7 +32,6 @@ const thetaIncorrect = /** @type {HTMLInputElement} */ ($('#theta-incorrect'));
 /** @type {Review[]} */
 const reviews = [];
 let now = 9.5;
-let engaged = false;
 
 /** @param {number} days */
 const x = (days) => left + (days / maxDays) * (right - left);
@@ -145,11 +145,6 @@ function draw() {
   );
 }
 
-function engage() {
-  if (engaged) return;
-  engaged = true;
-  parent.postMessage({ type: 'control-point-moved' }, '*');
-}
 
 function changed() {
   draw();

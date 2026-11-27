@@ -1,0 +1,10 @@
+title: Vietnamese
+kind: tone-speech
+source: FPT Open Speech Dataset
+sourceUrl: https://data.mendeley.com/datasets/k9sxg2twv4/4
+license: CC BY 4.0
+licenseUrl: https://creativecommons.org/licenses/by/4.0/
+notice: Copyright 2018 FPT Corporation. Compiled by Duc Chung Tran. This activity uses a subset with
+  normalized transcripts. The dataset page includes the FPT permission notice.
+meta:
+  language: vie

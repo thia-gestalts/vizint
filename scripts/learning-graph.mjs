@@ -157,17 +157,30 @@ export function buildLearningGraph(entries, common, topics = []) {
     }
   }
 
-  const eventEntries = entries.map(({ slug, activity, type, learning, customHost }) => {
-    if (customHost) return { slug, activity, type, targets: learning.records };
-    const exercise = learning?.exercises?.[0];
-    if (type === 'attempt' && (learning?.exercises?.length !== 1 || !exercise?.assesses?.length)) {
-      throw new Error(`Attempt ${activity} must define one assessed exercise for its interactive frame`);
+  // What each view may report in its learning events, and what it reports
+  // when it names no targets.
+  const eventEntries = entries.map(({ slug, activity, type, learning = {} }) => {
+    const exercises = learning.exercises ?? [];
+    const allowed = new Map();
+    for (const scope of [learning, ...exercises]) {
+      for (const record of scope.records ?? []) allowed.set(identity(record), records.get(identity(record)));
+      for (const relation of ['topics', 'teaches', 'answers', 'practices', 'assesses']) {
+        for (const { target } of scope[relation] ?? []) allowed.set(identity(target), records.get(identity(target)));
+      }
     }
-    const topics = exercise?.topics?.length ? exercise.topics : learning?.topics ?? [];
-    const links = type === 'attempt' ? [...exercise.assesses, ...topics] : learning?.topics ?? [];
-    const targets = new Map(links.map(({ target }) => [identity(target), records.get(identity(target))]));
-    if (targets.size === 0) throw new Error(`Missing learning event targets for ${activity}`);
-    return { slug, activity, type, targets: [...targets.values()] };
+    if (type === 'attempt' && !exercises.some(exercise => exercise.assesses?.length)) {
+      throw new Error(`Attempt ${activity} must define an assessed exercise`);
+    }
+    const [only] = exercises;
+    const links = type === 'engagement' ? learning.topics ?? []
+      : exercises.length === 1 ? [...only.assesses, ...(only.topics?.length ? only.topics : learning.topics ?? [])] : [];
+    const targets = [...allowed.values()];
+    if (targets.length === 0) throw new Error(`Missing learning event targets for ${activity}`);
+    return {
+      slug, activity, type, targets, defaults: [...new Set(links.map(({ target }) => target.id))],
+      exercises: exercises.filter(exercise => exercise.dataset)
+        .map(exercise => ({ anchor: exerciseAnchor(exercise), dataset: exercise.dataset })),
+    };
   });
 
   return { byActivity, backlinks, eventEntries, records, topicFolders, topicLinks, topicGraph };

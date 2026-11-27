@@ -1,5 +1,10 @@
+/** @param {number} integer @param {number} places */
 const decimal = (integer, places) => (integer / 10 ** places).toFixed(places);
 
+/**
+ * @param {number} [previousValue] Avoids repeating the last question.
+ * @returns {{ value: number, prompt: string, options: string[], correct: number }}
+ */
 export function newQuestion(previousValue) {
   // Sample an integer count of thousandths with a nonzero hundredths digit.
   // Grade using integers so a decimal tie is exact.
@@ -18,7 +23,6 @@ export function newQuestion(previousValue) {
   }
 
   return {
-    id: crypto.randomUUID(),
     value,
     prompt: decimal(value, 3),
     options,

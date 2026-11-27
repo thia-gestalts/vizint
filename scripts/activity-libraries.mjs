@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { dirname, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 
@@ -25,14 +25,23 @@ export const activityLibraries = {
   },
 };
 
+// Libraries checked-in views may use beyond those offered to generation.
+export const viewLibraries = {
+  ...activityLibraries,
+  'ts-fsrs': { summary: 'Spaced-repetition scheduling with FSRS.' },
+};
+
+/** The runtime every view may import as `vizint`, bundled like a library. */
+export const runtimeEntry = fileURLToPath(new URL('src/runtime/index.js', root));
+
 export function libraryNamesInBrief(brief) {
   return Object.keys(activityLibraries).filter(name => activityLibraries[name].aliases.test(brief));
 }
 
-export function validateLibraries(names) {
+export function validateLibraries(names, registry = activityLibraries) {
   if (!Array.isArray(names) || new Set(names).size !== names.length ||
-      names.some(name => typeof name !== 'string' || !Object.hasOwn(activityLibraries, name))) {
-    throw new Error('Expected a list of unique supported activity libraries: ' + Object.keys(activityLibraries).join(', '));
+      names.some(name => typeof name !== 'string' || !Object.hasOwn(registry, name))) {
+    throw new Error('Expected a list of unique supported activity libraries: ' + Object.keys(registry).join(', '));
   }
 }
 
@@ -44,7 +53,7 @@ export function normalizeLibraryNames(names) {
 }
 
 export function libraryVersion(name) {
-  return Object.hasOwn(activityLibraries, name) ? manifest.devDependencies[name] : undefined;
+  return Object.hasOwn(viewLibraries, name) ? manifest.devDependencies[name] : undefined;
 }
 
 export function libraryCatalog() {
@@ -63,9 +72,9 @@ export async function libraryReferences(names) {
 // Frames load nothing over the network, so each library stylesheet inlines its
 // WOFF2 fonts and drops the WOFF and TrueType fallbacks.
 export async function libraryStyles(names = []) {
-  validateLibraries(names);
-  return (await Promise.all(names.filter(name => activityLibraries[name].styles).map(async name => {
-    const file = fileURLToPath(new URL(`node_modules/${activityLibraries[name].styles}`, root));
+  validateLibraries(names, viewLibraries);
+  return (await Promise.all(names.filter(name => viewLibraries[name].styles).map(async name => {
+    const file = fileURLToPath(new URL(`node_modules/${viewLibraries[name].styles}`, root));
     const folder = pathToFileURL(dirname(file) + '/');
     const css = await readFile(file, 'utf8');
     const fonts = new Map();
@@ -77,9 +86,14 @@ export async function libraryStyles(names = []) {
   }))).join('\n');
 }
 
-export async function bundleActivity({ filename, source, libraries }) {
-  validateLibraries(libraries);
+/**
+ * Bundles an activity into one script. It may import the `vizint` runtime, its
+ * declared libraries, and modules inside its own folder, nothing else.
+ */
+export async function bundleActivity({ filename, source, libraries = [] }) {
+  validateLibraries(libraries, viewLibraries);
   const resolveDir = fileURLToPath(root);
+  const folder = dirname(filename) + sep;
   const { outputFiles } = await build({
     entryPoints: [filename], bundle: true, format: 'iife', platform: 'browser',
     write: false, minify: true, legalComments: 'inline', logLevel: 'silent',
@@ -88,14 +102,23 @@ export async function bundleActivity({ filename, source, libraries }) {
       setup(builder) {
         builder.onResolve({ filter: /.*/ }, args => {
           if (args.kind === 'entry-point') return { path: filename, namespace: 'activity-source' };
-          if (args.namespace !== 'activity-source') return;
+          if (args.pluginData === 'library') return;
+          if (args.namespace !== 'activity-source' && !args.importer.startsWith(folder)) return;
+          const shown = args.importer.startsWith(folder) ? relative(folder, args.importer) : 'The activity';
+          if (args.path === 'vizint') return { path: runtimeEntry };
+          if (args.path.startsWith('.')) {
+            if (!resolve(args.resolveDir, args.path).startsWith(folder)) {
+              return { errors: [{ text: `${shown} imports "${args.path}" from outside its view folder.` }] };
+            }
+            return;
+          }
           if (args.kind !== 'import-statement' || !libraries.includes(args.path)) {
             return { errors: [{ text: `Activity import "${args.path}" is unavailable. Use a static import from a declared library.` }] };
           }
-          return builder.resolve(args.path, { kind: args.kind, resolveDir });
+          return builder.resolve(args.path, { kind: args.kind, resolveDir, pluginData: 'library' });
         });
         builder.onLoad({ filter: /.*/, namespace: 'activity-source' }, () => ({
-          contents: source, loader: filename.endsWith('.ts') ? 'ts' : 'js', resolveDir,
+          contents: source, loader: filename.endsWith('.ts') ? 'ts' : 'js', resolveDir: dirname(filename),
         }));
       },
     }],

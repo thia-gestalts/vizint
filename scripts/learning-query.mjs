@@ -19,7 +19,7 @@ export function createQueryIndex(entries, graph) {
       path: viewPath(entry), text: [entry.title, entry.intro, ...context(undefined, ['topics'])].join('\n') });
     for (const exercise of entry.learning.exercises ?? []) {
       const id = exerciseId(entry, exercise);
-      const hasAnchor = (!entry.customHost && entry.type === 'attempt') ||
+      const hasAnchor = (entry.type === 'attempt' && entry.learning.exercises.length === 1) ||
         links.some(link => link.exercise === exercise && link.weight !== 0);
       items.set(id, { id, kind: 'exercise', label: exercise.title,
         path: viewPath(entry, hasAnchor ? exercise : undefined),

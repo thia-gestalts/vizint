@@ -1,9 +1,8 @@
 <main>
-  <div id="languages" role="group" aria-label="Practice language">
-    <button type="button" data-code="vie" aria-pressed="false">Vietnamese</button>
-    <button type="button" data-code="cmn" aria-pressed="false">Mandarin</button>
+  <div id="dataset">
+    <button type="button" id="open-license" aria-haspopup="dialog">Dataset notice</button>
   </div>
-  <p id="status" role="status">Choose a language to start practicing.</p>
+  <p id="status" role="status">Loading practice clips…</p>
   <button type="button" id="retry-load" hidden>Retry loading</button>
   <section id="practice" aria-label="Listening exercise" hidden>
     <div class="player">
@@ -21,15 +20,11 @@
     <div id="answers" role="group" aria-labelledby="prompt"></div>
     <p id="feedback" role="status"></p>
   </section>
-  <footer id="credits" hidden>
-    Audio from <button type="button" data-credit="dataset"></button>
-    <button type="button" id="open-license" aria-haspopup="dialog">View license</button>
-  </footer>
   <dialog id="license" aria-labelledby="license-title">
     <h2 id="license-title">Dataset license</h2>
     <p id="notice"></p>
     <div class="controls">
-      <button type="button" data-credit="license"></button>
+      <a id="license-link" target="_blank" rel="noopener noreferrer"></a>
       <button type="button" id="close-license">Close</button>
     </div>
   </dialog>

@@ -21,10 +21,6 @@ try {
     || !['engagement', 'attempt'].includes(entry.type)) {
     throw new Error('The view manifest needs a title, intro, frameHeight, and supported type.');
   }
-  if (entry.customHost) {
-    result.status = 'unsupported';
-    throw new Error('Custom hosts require the site build and preview.');
-  }
   let code = source;
   if (entry.sharedScript) {
     if (!/^src\/[\w-]+\.js$/.test(entry.sharedScript)) throw new Error('Invalid shared script path.');

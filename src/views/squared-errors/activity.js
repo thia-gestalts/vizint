@@ -1,3 +1,5 @@
+import { engage } from 'vizint';
+
 const baseline = 198;
 const units = 16;
 const plot = /** @type {SVGSVGElement} */ (document.querySelector('#plot'));
@@ -29,5 +31,5 @@ function draw() {
   });
 }
 
-bindVerticalPointDrag(plot, handles, values, units, draw);
+bindVerticalPointDrag(plot, handles, values, units, draw, engage);
 draw();

@@ -1,12 +1,15 @@
 order: 20
 type: attempt
-patterns: [host-questions, audio, multiple-choice, custom-host]
+patterns: [audio, multiple-choice, dataset-slot]
 title: Minimal pairs practice
 intro: Listen to Vietnamese or Mandarin speech and choose the spelling with the
   tone you heard.
-customHost: true
 media: true
-assets: data
+datasets:
+  speech:
+    kind: tone-speech
+    label: Language
+    options: [vie-fpt-speech, cmn-aishell-speech]
 collapseExercises: true
 frameHeight: 29rem
 previewReady: "#answers button:not(:disabled)"

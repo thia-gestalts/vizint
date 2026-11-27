@@ -14,9 +14,9 @@ const stopwords = new Set(('the and for with that this from into when then than 
 const words = text => (text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [])
   .filter(word => word.length > 2 && !stopwords.has(word));
 
-/** Views a generated activity can imitate: standalone engagements without a custom host. */
+/** Views a generated activity can imitate: engagements without datasets. */
 export function exampleCandidates(catalog = entries) {
-  return catalog.filter(entry => entry.type === 'engagement' && !entry.customHost).map(entry => {
+  return catalog.filter(entry => entry.type === 'engagement' && !Object.keys(entry.datasets ?? {}).length).map(entry => {
     const topics = (entry.learning.records ?? []).filter(record => record.kind === 'topic').map(record => record.name);
     const patterns = entry.patterns ?? [];
     return {

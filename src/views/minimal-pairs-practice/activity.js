@@ -1,69 +1,77 @@
-const languageButtons = [...document.querySelectorAll('#languages button')];
-const practice = document.querySelector('#practice');
-const prompt = document.querySelector('#prompt');
-const answers = document.querySelector('#answers');
-const audio = document.querySelector('audio');
-const replay = document.querySelector('#replay');
-const hide = document.querySelector('#hide-clip');
-const audioStatus = document.querySelector('#audio-status');
-const status = document.querySelector('#status');
-const retry = document.querySelector('#retry-load');
-const native = document.querySelector('#native');
-const feedback = document.querySelector('#feedback');
-const credits = document.querySelector('#credits');
-const license = document.querySelector('#license');
-const send = data => parent.postMessage(data, '*');
-let pack, current, audioUrl;
+import { attempt, context, datasetPicker, history, historyReady, reportHeight, slot, state, target } from 'vizint';
+import { buildCatalog, languages } from './languages.mjs';
+import { selectRound } from './scheduler.mjs';
+
+/**
+ * @typedef {import('./languages.mjs').Clip} Clip
+ * @typedef {import('./languages.mjs').Candidate} Candidate
+ * @typedef {{ clip: Clip, candidate: Candidate, correct: number, firstAnswer: boolean, complete: boolean }} Round
+ */
+
+/** @param {string} selector */
+const element = selector => /** @type {HTMLElement} */ (document.querySelector(selector));
+const main = element('main');
+const practice = element('#practice');
+const prompt = element('#prompt');
+const answers = element('#answers');
+const audio = /** @type {HTMLAudioElement} */ (element('audio'));
+const replay = /** @type {HTMLButtonElement} */ (element('#replay'));
+const hide = /** @type {HTMLButtonElement} */ (element('#hide-clip'));
+const audioStatus = element('#audio-status');
+const status = element('#status');
+const retry = element('#retry-load');
+const native = element('#native');
+const feedback = element('#feedback');
+const license = /** @type {HTMLDialogElement} */ (element('#license'));
+const openLicense = element('#open-license');
+const notice = element('#notice');
+const licenseLink = /** @type {HTMLAnchorElement} */ (element('#license-link'));
+const answerButtons = () => /** @type {HTMLButtonElement[]} */ ([...answers.children]);
+
+const speech = slot('speech');
+element('#dataset').prepend(datasetPicker(speech));
+/** @type {Map<string, Set<string>>} */
+const usedWords = new Map();
+/** @type {import('vizint').Pack | undefined} */
+let pack;
+let code = '';
+/** @type {Clip[]} */
+let catalog = [];
+/** @type {Set<string>} */
+let hidden = new Set();
+/** @type {Round | undefined} */
+let round;
+let generation = 0;
+let audioReady = false;
 let audioFailed = false;
-let inFlight = false;
-let awaitingSave = false;
 let focusAnswers = false;
 
-for (const button of languageButtons) {
-  button.onclick = () => send({ type: 'language', code: button.dataset.code });
+function showNotice() {
+  const option = speech.option();
+  notice.textContent = option.notice ?? '';
+  licenseLink.textContent = option.license;
+  licenseLink.href = option.licenseUrl ?? '';
+  openLicense.hidden = !option.notice;
 }
-retry.onclick = () => send({ type: 'retry-load' });
-document.querySelector('#open-license').onclick = () => license.showModal();
-document.querySelector('#close-license').onclick = () => license.close();
-for (const button of document.querySelectorAll('[data-credit]')) {
-  button.onclick = () => send({ type: 'credit', link: button.dataset.credit });
-}
-
-function lockNavigation() {
-  for (const button of languageButtons) button.disabled = awaitingSave;
-  hide.disabled = awaitingSave || inFlight;
-}
+openLicense.onclick = () => license.showModal();
+element('#close-license').onclick = () => license.close();
 
 function clearAudio() {
   audio.pause();
   audio.removeAttribute('src');
   audio.load();
-  if (audioUrl) URL.revokeObjectURL(audioUrl);
-  audioUrl = undefined;
-  audioFailed = false;
+  audioReady = audioFailed = false;
   replay.disabled = true;
   audioStatus.textContent = '';
 }
 
-async function play() {
-  if (!current) return;
-  if (audioFailed) {
-    replay.disabled = true;
-    audioStatus.textContent = 'Loading audio…';
-    send({ type: 'retry-audio', id: current });
-    return;
-  }
-  if (!audioUrl) return;
-  const requested = audioUrl;
-  audioStatus.textContent = '';
-  audio.currentTime = 0;
-  try {
-    await audio.play();
-  } catch (error) {
-    if (requested !== audioUrl || error.name === 'AbortError') return;
-    if (error.name === 'NotAllowedError') audioStatus.textContent = 'Press Replay to start audio.';
-    else showAudioError();
-  }
+/** @param {string} text */
+function showStatus(text, canRetry = false) {
+  round = undefined;
+  practice.hidden = true;
+  clearAudio();
+  status.textContent = text;
+  retry.hidden = !canRetry;
 }
 
 function showAudioError() {
@@ -72,31 +80,52 @@ function showAudioError() {
   audioStatus.textContent = 'Could not play this clip. Press Replay to retry.';
 }
 
-audio.addEventListener('error', () => { if (audioUrl) showAudioError(); });
-replay.onclick = play;
-hide.onclick = () => { if (current) send({ type: 'hide', id: current }); };
-
-function choose(choice) {
-  if (!current || inFlight || answers.children[choice]?.disabled) return;
-  focusAnswers = answers.contains(document.activeElement);
-  inFlight = true;
-  lockNavigation();
-  send({ type: 'answer', id: current, choice });
+async function play() {
+  if (!round) return;
+  if (audioFailed) {
+    replay.disabled = true;
+    audioStatus.textContent = 'Loading audio…';
+    void loadAudio(round);
+    return;
+  }
+  if (!audioReady) return;
+  const current = round;
+  audioStatus.textContent = '';
+  audio.currentTime = 0;
+  try {
+    await audio.play();
+  } catch (error) {
+    const { name } = /** @type {Error} */ (error);
+    if (round !== current || name === 'AbortError') return;
+    if (name === 'NotAllowedError') audioStatus.textContent = 'Press Replay to start audio.';
+    else showAudioError();
+  }
 }
 
-addEventListener('keydown', event => {
-  if (!current || license.open || event.repeat || event.altKey || event.ctrlKey || event.metaKey) return;
-  if (event.code === 'Space' && !event.target.closest?.('button, audio, a, input, select, textarea, [contenteditable]')) {
-    event.preventDefault();
-    void play();
-  }
-  if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-    if (event.target.closest?.('audio, #languages')) return;
-    event.preventDefault();
-    choose(Number(event.key === 'ArrowRight'));
-  }
-});
+audio.addEventListener('error', () => { if (audioReady) showAudioError(); });
+replay.onclick = play;
 
+/** Clips are read from the dataset one at a time, as they are needed. @param {Round} current */
+async function loadAudio(current) {
+  audioFailed = false;
+  try {
+    const url = await /** @type {import('vizint').Pack} */ (pack).blobUrl(`audio/${current.clip.filename}`);
+    if (round !== current) return;
+    audio.src = url;
+    audioReady = true;
+    replay.disabled = false;
+    audioStatus.textContent = '';
+    for (const button of answerButtons()) button.disabled = current.complete || button.classList.contains('wrong');
+    if (document.activeElement?.closest('.vizint-dataset')) prompt.focus({ preventScroll: true });
+    if (focusAnswers && document.activeElement === document.body) answerButtons()[0]?.focus({ preventScroll: true });
+    focusAnswers = false;
+    void play();
+  } catch {
+    if (round === current) showAudioError();
+  }
+}
+
+/** @param {string} label @param {number} choice @param {number} index */
 function answerButton(label, choice, index) {
   const button = document.createElement('button');
   button.type = 'button';
@@ -104,7 +133,7 @@ function answerButton(label, choice, index) {
   button.onclick = () => choose(choice);
   const spelling = document.createElement('span');
   spelling.className = 'spelling';
-  spelling.lang = pack.lang;
+  spelling.lang = languages[code].lang;
   const characters = [...label];
   const mark = document.createElement('mark');
   mark.textContent = characters[index];
@@ -116,77 +145,112 @@ function answerButton(label, choice, index) {
   return button;
 }
 
-addEventListener('message', ({ source, data }) => {
-  if (source !== parent || !data) return;
-  if (data.type === 'loading' || data.type === 'status') {
-    current = undefined;
-    practice.hidden = true;
-    clearAudio();
-    retry.hidden = !data.retry;
-    status.textContent = data.text ?? 'Loading practice clips…';
-    if (data.type === 'loading') {
-      pack = data.pack;
-      credits.hidden = false;
-      document.querySelector('[data-credit="dataset"]').textContent = pack.dataset;
-      document.querySelector('[data-credit="license"]').textContent = pack.license;
-      document.querySelector('#notice').textContent = pack.notice;
-      for (const button of languageButtons) button.setAttribute('aria-pressed', String(button.dataset.code === data.code));
-    }
+function nextRound() {
+  const events = history().filter(event => event.type === 'attempt' && event.origin.app === context.app
+    && Number.isFinite(event.score));
+  const selected = selectRound(catalog, hidden, round?.clip.filename,
+    /** @type {Set<string>} */ (usedWords.get(code)), events, `${context.activity}/${code}`);
+  if (!selected) {
+    showStatus('No practice clips left for this language. Hidden clips stay excluded.');
     return;
   }
-  if (data.type === 'round') {
-    current = data.id;
-    inFlight = false;
-    lockNavigation();
-    practice.hidden = false;
-    status.textContent = '';
-    retry.hidden = true;
-    feedback.textContent = '';
-    clearAudio();
-    audioStatus.textContent = 'Loading audio…';
-    native.textContent = data.nativeScript ?? '';
-    native.hidden = !data.nativeScript;
-    answers.replaceChildren(...data.options.map((label, choice) => answerButton(label, choice, data.index)));
-    return;
+  const { clip, candidate } = selected;
+  const correct = Number(Math.random() < 0.5);
+  const options = [candidate.label, candidate.label];
+  options[correct] = clip.transcript;
+  round = { clip, candidate, correct, firstAnswer: true, complete: false };
+  practice.hidden = false;
+  status.textContent = '';
+  retry.hidden = true;
+  feedback.textContent = '';
+  clearAudio();
+  audioStatus.textContent = 'Loading audio…';
+  hide.disabled = false;
+  native.textContent = clip.nativeScript ?? '';
+  native.hidden = !clip.nativeScript;
+  answers.replaceChildren(...options.map((label, choice) => answerButton(label, choice, candidate.index)));
+  void loadAudio(round);
+}
+
+/** The view grades the answer itself; only the first answer of a round counts. @param {number} choice */
+function choose(choice) {
+  const current = round;
+  const button = answerButtons()[choice];
+  if (!current || current.complete || !button || button.disabled) return;
+  if (!current.firstAnswer && choice !== current.correct) return;
+  focusAnswers = answers.contains(document.activeElement);
+  const correct = choice === current.correct;
+  button.classList.add(correct ? 'correct' : 'wrong');
+  button.disabled = true;
+  if (current.firstAnswer) {
+    current.firstAnswer = false;
+    const { candidate } = current;
+    attempt({
+      score: Number(correct),
+      targets: [target('skill', `${context.activity}/${code}/${candidate.pair}`), target('topic', `${languages[code].name} tones`)],
+      activity: `${context.activity}/${code}/${candidate.correct}/${candidate.distractor}`,
+    });
   }
-  if (data.type === 'saved') {
-    awaitingSave = false;
-    lockNavigation();
-    return;
+  if (correct) {
+    current.complete = true;
+    hide.disabled = true;
+    for (const other of answerButtons()) other.disabled = true;
+    audio.pause();
+    feedback.textContent = 'Correct.';
+    setTimeout(() => { if (round === current) nextRound(); }, 700);
+  } else {
+    feedback.textContent = 'Incorrect.';
+    if (focusAnswers) answerButtons()[1 - choice]?.focus({ preventScroll: true });
   }
-  if (data.id !== current) return;
-  if (data.type === 'audio') {
-    clearAudio();
-    audioUrl = URL.createObjectURL(new Blob([data.bytes], { type: 'audio/mpeg' }));
-    audio.src = audioUrl;
-    replay.disabled = false;
-    for (const button of answers.children) button.disabled = button.classList.contains('wrong');
-    if (languageButtons.includes(document.activeElement)) prompt.focus({ preventScroll: true });
-    if (focusAnswers && document.activeElement === document.body) answers.firstElementChild.focus({ preventScroll: true });
-    focusAnswers = false;
+}
+
+hide.onclick = () => {
+  if (!round || round.complete) return;
+  hidden.add(round.clip.filename);
+  state.set(`hidden/${code}`, [...hidden]);
+  nextRound();
+};
+
+addEventListener('keydown', event => {
+  const origin = /** @type {Element | null} */ (event.target);
+  if (!round || license.open || event.repeat || event.altKey || event.ctrlKey || event.metaKey) return;
+  if (event.code === 'Space' && !origin?.closest?.('button, audio, a, input, select, textarea, [contenteditable]')) {
+    event.preventDefault();
     void play();
   }
-  if (data.type === 'audio-error') showAudioError();
-  if (data.type === 'hide-error') audioStatus.textContent = 'Could not hide this clip. Try again.';
-  if (data.type === 'answer') {
-    const button = answers.children[data.choice];
-    button.classList.add(data.correct ? 'correct' : 'wrong');
-    button.disabled = true;
-    inFlight = data.correct;
-    awaitingSave = data.saving;
-    lockNavigation();
-    if (data.correct) {
-      audio.pause();
-      feedback.textContent = 'Correct.';
-    } else {
-      feedback.textContent = 'Incorrect.';
-      if (focusAnswers) answers.children[1 - data.choice].focus({ preventScroll: true });
-    }
+  if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+    if (origin?.closest?.('audio, select')) return;
+    event.preventDefault();
+    choose(Number(event.key === 'ArrowRight'));
   }
 });
 
-const main = document.querySelector('main');
-new ResizeObserver(() => {
-  send({ type: 'height', value: main.getBoundingClientRect().height + main.offsetTop * 2 });
-}).observe(main);
-send({ type: 'ready' });
+async function start() {
+  const request = ++generation;
+  showNotice();
+  showStatus('Loading practice clips…');
+  try {
+    const loaded = await speech.load();
+    const clips = await loaded.json('clips.json');
+    await historyReady();
+    if (request !== generation) return;
+    const language = String(loaded.meta.language);
+    if (!Object.hasOwn(languages, language)) throw new Error(`Unsupported language ${language}`);
+    pack = loaded;
+    code = language;
+    catalog = buildCatalog(clips, code);
+    const stored = state.get(`hidden/${code}`);
+    hidden = new Set(Array.isArray(stored) ? stored : []);
+    if (!usedWords.has(code)) usedWords.set(code, new Set());
+    nextRound();
+  } catch (error) {
+    if (request !== generation) return;
+    const { code: reason, message } = /** @type {{ code?: string, message: string }} */ (error);
+    showStatus(reason === 'needs-file' ? message : 'Could not load practice clips.', true);
+  }
+}
+
+retry.onclick = () => void start();
+speech.onChange(() => void start());
+reportHeight(main, () => main.getBoundingClientRect().height + main.offsetTop * 2);
+void start();

@@ -194,10 +194,11 @@ hand-authored activity, add the same declaration:
 libraries: [three]
 ```
 
-The build bundles the imports and inlines the result. An activity with
-`libraries` can use the standard host. The bundle supports static imports
-from the declared package entry points. Keep assets and data offline, and
-handle missing browser capabilities such as WebGL 2 in the activity.
+The build bundles the imports and inlines the result. The bundle supports
+static imports from the declared package entry points, the `vizint` runtime
+(for example `engage()`, see `doc/view-folders.md`), and modules in the view's
+own folder. Keep assets and data offline, and handle missing browser
+capabilities such as WebGL 2 in the activity.
 
 For a custom brief, the model can return a library request instead of a
 draft:

@@ -1,0 +1,8 @@
+title: World
+kind: country-map
+source: Map geometry from Natural Earth
+sourceUrl: https://www.naturalearthdata.com/
+license: Public domain
+licenseUrl: https://www.naturalearthdata.com/about/terms-of-use/
+meta:
+  mapName: world map
