@@ -1,5 +1,5 @@
 import { activityFrame } from './activity-frame.mjs';
-import { bundleActivity } from './activity-libraries.mjs';
+import { bundleActivity, libraryStyles } from './activity-libraries.mjs';
 import { build } from 'esbuild';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
@@ -137,7 +137,9 @@ for (const entry of entries) {
   }
   const styles = await read(`src/views/${slug}/activity.css`);
   const common = await read('src/frame.css');
-  const frame = activityFrame({ title, common, styles, markup, code, media: entry.media });
+  const frame = activityFrame({
+    title, common, libraryStyles: await libraryStyles(entry.libraries), styles, markup, code, media: entry.media,
+  });
   const path = new URL(`${slug}/`, output);
   await mkdir(path);
   const folder = new URL(`src/views/${slug}/`, root);

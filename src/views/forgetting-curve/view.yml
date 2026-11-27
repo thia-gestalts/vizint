@@ -1,0 +1,68 @@
+order: 70
+activity: ebbinghaus-forgetting-curve
+frameHeight: calc(clamp(0px, 45vw - 1rem, 22rem) + 12rem)
+libraries: [katex]
+previewReady: "#formula .katex"
+title: Ebbinghaus forgetting curve
+intro: Move Δ to let time pass since the last review, and h to change how
+  durable the memory is. After one half-life, recall is a coin flip. Each
+  further half-life halves it again.
+type: engagement
+patterns: [svg-plot, drag-handles, keyboard-handles, range-slider, live-formula]
+source: Exponential forgetting after Ebbinghaus’s Über das Gedächtnis (1885), in
+  the half-life form used by Settles and Meeder’s half-life regression (2016).
+learning:
+  records:
+    - kind: topic
+      name: Forgetting Curve
+    - kind: topic
+      name: Memory
+    - kind: topic
+      name: Half-Life
+    - kind: fact
+      key: forgetting-curve/half-life
+      statement: With recall probability p = 2^(−Δ/h), recall is 50% after one
+        half-life h, and each further half-life halves it again.
+    - kind: question
+      id: 633a6db2-0dae-4e96-944d-b291726589de
+      text: How does the chance of recalling something fall as time passes since
+        you last reviewed it?
+  topicLinks:
+    - subject:
+        kind: topic
+        name: forgetting curve
+      relation: within
+      object:
+        kind: topic
+        name: memory
+    - subject:
+        kind: topic
+        name: half-life
+      relation: within
+      object:
+        kind: topic
+        name: mathematics
+    - subject:
+        kind: topic
+        name: forgetting curve
+      relation: related
+      object:
+        kind: topic
+        name: half-life
+  topics:
+    - target:
+        kind: topic
+        name: forgetting curve
+      weight: 1
+    - target:
+        kind: topic
+        name: half-life
+      weight: 0.6
+  teaches:
+    - target:
+        kind: fact
+        key: forgetting-curve/half-life
+  answers:
+    - target:
+        kind: question
+        id: 633a6db2-0dae-4e96-944d-b291726589de

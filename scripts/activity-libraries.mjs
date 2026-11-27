@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
+import { dirname } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 
 const root = new URL('../', import.meta.url);
@@ -15,6 +16,12 @@ export const activityLibraries = {
     aliases: /\b(?:three[. -]?js|3js|3d)\b/i,
     summary: 'Interactive 3D geometry and WebGL rendering.',
     notes: 'WebGLRenderer requires WebGL 2. Handle an unavailable GPU context. Use procedural geometry and colors for offline use.',
+  },
+  katex: {
+    aliases: /\b(?:katex|la?tex|formulas?|equations?)\b/i,
+    summary: 'Typeset LaTeX math notation.',
+    notes: 'Render into an element from the activity markup with katex.render. Re-render to show live values. Its stylesheet and fonts are included automatically.',
+    styles: 'katex/dist/katex.min.css',
   },
 };
 
@@ -51,6 +58,23 @@ export async function libraryReferences(names) {
     const example = await readFile(new URL(`activity-library-examples/${name}.js`, import.meta.url), 'utf8');
     return `${name} (version ${libraryVersion(name)})\n${activityLibraries[name].notes}\nExample:\n${example.trim()}`;
   }))).join('\n\n');
+}
+
+// Frames load nothing over the network, so each library stylesheet inlines its
+// WOFF2 fonts and drops the WOFF and TrueType fallbacks.
+export async function libraryStyles(names = []) {
+  validateLibraries(names);
+  return (await Promise.all(names.filter(name => activityLibraries[name].styles).map(async name => {
+    const file = fileURLToPath(new URL(`node_modules/${activityLibraries[name].styles}`, root));
+    const folder = pathToFileURL(dirname(file) + '/');
+    const css = await readFile(file, 'utf8');
+    const fonts = new Map();
+    for (const [, path] of css.matchAll(/url\(([^)]+\.woff2)\)/g)) {
+      fonts.set(path, (await readFile(new URL(path, folder))).toString('base64'));
+    }
+    return css.replace(/url\(([^)]+\.woff2)\) format\("woff2"\)(?:,url\([^)]+\) format\("[^"]+"\))*/g,
+      (_, path) => `url(data:font/woff2;base64,${fonts.get(path)}) format("woff2")`);
+  }))).join('\n');
 }
 
 export async function bundleActivity({ filename, source, libraries }) {

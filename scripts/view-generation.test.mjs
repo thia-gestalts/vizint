@@ -301,6 +301,17 @@ update();`,
     assert.match(requests[0].messages[0].content, /from 'three';/);
   });
 
+  await t.test('KaTeX alias supplies the reference and renders offline with inlined fonts', async () => {
+    const code = await readFile(new URL('./activity-library-examples/katex.js', import.meta.url), 'utf8');
+    const result = await run(['generate', 'Show the formula for a parabola', '--samples', '1'],
+      [{ ...draft, markup: '<div id="formula"></div>', code, libraries: ['katex'] }]);
+    const [attempt] = result.rows[0].attempts;
+    assert.equal(attempt.checks.type, 'pass');
+    assert.equal(attempt.checks.bundle, 'pass');
+    assert.equal(attempt.checks.startup, 'pass');
+    assert.match(requests[0].messages[0].content, /from 'katex';/);
+  });
+
   await t.test('expired repair request is recorded as a deadline', async () => {
     const accelerate = `const original = AbortSignal.timeout;
       AbortSignal.timeout = ms => original(ms > 100000 && ms <= 120000 ? 100 : ms);`;

@@ -5,7 +5,7 @@ import ts from 'typescript';
 import { fixActivity } from './activity-codemod.mjs';
 import { activityFrame } from './activity-frame.mjs';
 import { activityProgram } from './activity-program.mjs';
-import { bundleActivity } from './activity-libraries.mjs';
+import { bundleActivity, libraryStyles } from './activity-libraries.mjs';
 import { escapeHTML } from './learning-pages.mjs';
 
 const common = await readFile(new URL('../src/frame.css', import.meta.url), 'utf8');
@@ -33,7 +33,7 @@ async function checkBrowser(draft, folder, browser, fixture, checks, diagnostics
     page.on('console', message => {
       if (message.type() === 'error') errors.add(message.text());
     });
-    const source = activityFrame({ common, ...draft });
+    const source = activityFrame({ common, libraryStyles: await libraryStyles(draft.libraries), ...draft });
     const frame = page.frameLocator('iframe');
     try {
       await page.setContent(`<style>body{margin:0}iframe{display:block;width:100%;height:520px;border:0}</style>

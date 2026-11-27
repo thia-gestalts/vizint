@@ -1,0 +1,37 @@
+#formula { min-height: 3.6rem; font-size: 1.45rem; overflow-x: auto; overflow-y: hidden; }
+#formula .katex-display { margin: 0 0 .5rem; }
+#plot {
+  display: block;
+  width: 100%;
+  border-radius: .65rem;
+  background: #f6f8ff;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+path { fill: none; vector-effect: non-scaling-stroke; }
+.gridline { stroke: #c2cee7; }
+.tick { fill: #4f607c; }
+.tick.y { text-anchor: end; dominant-baseline: central; }
+.tick.x { text-anchor: middle; }
+.axis-label { fill: #4f607c; text-anchor: middle; font-size: 14px; }
+.curve { stroke: #344dc9; stroke-width: 3; }
+.guides { stroke: #6a7b97; stroke-dasharray: 4 4; }
+.handle { cursor: grab; touch-action: none; }
+.handle:active { cursor: grabbing; }
+.handle:focus-visible { outline: none; }
+.handle circle { fill: #fff; stroke-width: 3; }
+.handle:focus-visible circle { stroke-width: 5; }
+.handle text { text-anchor: middle; font-weight: 700; font-style: italic; pointer-events: none; }
+.elapsed { --accent: #007f75; }
+.half-life { --accent: #ab5416; }
+.handle circle { stroke: var(--accent); }
+.handle text { fill: var(--accent); }
+.controls { display: grid; grid-template-columns: max-content 1fr; gap: .35rem 1rem; align-items: center; margin-top: .7rem; }
+label { font-variant-numeric: tabular-nums; color: var(--accent); font-weight: 600; }
+output { display: inline-block; min-width: 2.5em; color: #17253c; }
+input { width: 100%; margin: 0; accent-color: var(--accent); }
+#elapsed { --accent: #007f75; }
+#half-life { --accent: #ab5416; }
+@media (max-width: 30rem) {
+  .controls { grid-template-columns: 1fr; }
+}
