@@ -255,6 +255,11 @@ hooks to your Codex and Claude Code settings. Start new sessions and trust
 the hooks if your client asks. Run the same command with `--disable` to
 stop collection and remove these hooks. Existing records stay on disk.
 
+A turn closes on `Stop`. Interrupted turns skip `Stop`, so Codex also closes
+them on its `Interrupt` hook, and both clients close an open turn on
+`SessionEnd`. Re-run `setup` after updating the tracker to register new hook
+events. Codex then lists them in `/hooks` for review.
+
 Keep working in the Vizint checkout, its Git worktrees, or your local Vizint
 workshop. Capture happens even when the dashboard is closed. Open **Authoring**
 in the dashboard to process queued checkout checks and read the timeline. Workshop checks appear from the workshop's normal workflow when

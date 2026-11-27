@@ -1,0 +1,37 @@
+<main>
+  <svg viewBox="0 0 380 328" role="img" aria-labelledby="plot-title plot-description">
+    <title id="plot-title">ROC curve for an example binary classifier</title>
+    <desc id="plot-description">The shaded area lies under the ROC curve. A dot marks the rates at the selected threshold. The dashed diagonal shows chance performance.</desc>
+    <path class="grid" d="M64 20H352 M64 84H352 M64 148H352 M64 212H352 M64 276H352
+                          M64 20V276 M136 20V276 M208 20V276 M280 20V276 M352 20V276"/>
+    <path id="roc-area"/>
+    <path class="diagonal" d="M64 276L352 20"/>
+    <path id="roc-curve"/>
+    <circle id="operating-point" r="5.5"/>
+    <g class="y-tick">
+      <text x="56" y="20">100%</text>
+      <text x="56" y="148">50%</text>
+      <text x="56" y="276">0%</text>
+    </g>
+    <g class="x-tick">
+      <text x="64" y="295">0%</text>
+      <text x="208" y="295">50%</text>
+      <text x="352" y="295">100%</text>
+    </g>
+    <text class="axis-label" x="208" y="318">False positive rate</text>
+    <text class="axis-label" transform="translate(17 148) rotate(-90)">True positive rate</text>
+  </svg>
+
+  <div class="controls">
+    <p class="auc">ROC AUC <strong id="auc-value"></strong></p>
+    <p class="note">The shaded area covers all thresholds. The dashed diagonal has an AUC of 0.50.</p>
+
+    <label for="threshold">Decision threshold <span id="threshold-value" aria-hidden="true"></span></label>
+    <input id="threshold" type="range" min="0" max="100" value="50" aria-describedby="threshold-help">
+    <p class="note" id="threshold-help">A score at or above the threshold counts as a positive prediction.</p>
+    <output for="threshold" class="rates">
+      <span>True positive rate <strong id="true-positive-rate"></strong></span>
+      <span>False positive rate <strong id="false-positive-rate"></strong></span>
+    </output>
+  </div>
+</main>

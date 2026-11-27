@@ -1,0 +1,33 @@
+title: Area under the ROC curve (AUC)
+intro: Move the decision threshold of a binary classifier to see the trade-off
+  between true and false positives. The shaded area shows how well the
+  classifier ranks positives above negatives.
+type: engagement
+frameHeight: 31rem
+previewReady: "#roc-curve[d]"
+patterns: [svg-plot, range-slider]
+learning:
+  records:
+    - kind: topic
+      name: ROC AUC
+    - kind: topic
+      name: Binary Classification
+    - kind: fact
+      key: roc-auc/thresholds
+      statement: The ROC curve plots the true positive rate against the false
+        positive rate at all decision thresholds. AUC is the area under the
+        full curve, so changing the threshold leaves it fixed.
+  topicLinks:
+    - subject: {kind: topic, name: ROC AUC}
+      relation: within
+      object: {kind: topic, name: Binary Classification}
+    - subject: {kind: topic, name: Binary Classification}
+      relation: within
+      object: {kind: topic, name: Statistics}
+  topics:
+    - target: {kind: topic, name: ROC AUC}
+      weight: 1
+    - target: {kind: topic, name: Binary Classification}
+      weight: 0.7
+  teaches:
+    - target: {kind: fact, key: roc-auc/thresholds}

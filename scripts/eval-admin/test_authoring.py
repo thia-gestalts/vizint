@@ -148,6 +148,22 @@ class AuthoringTest(unittest.TestCase):
         self.assertEqual((first["usage"]["input"], second["usage"]["input"]), (26, 4))
         self.assertEqual(second["efforts"], [])
 
+    def test_interrupt_and_session_end_close_turns(self):
+        self.send("codex", "UserPromptSubmit", native="cut")
+        self.source.write_text("let n = 2;")
+        self.send("codex", "Interrupt", native="cut")
+        self.send("claude", "UserPromptSubmit", session="quit")
+        self.source.write_text("let n = 3;")
+        self.send("claude", "SessionEnd", session="quit", reason="prompt_input_exit")
+        self.send("codex", "UserPromptSubmit", session="next", native="later")
+        _, turns = report.read_activity(self.root)
+        self.assertEqual(sorted((turn["client"], [r["change"] for r in turn["revisions"]]) for turn in turns),
+                         [("claude", ["existing"]), ("codex", ["existing"])])
+        self.assertTrue(all(turn["ended"] for turn in turns))
+        with authoring.database(self.root) as db:
+            later = db.execute("SELECT uncertain FROM turns WHERE native='later'").fetchone()
+        self.assertFalse(later["uncertain"])
+
     def record_checked_turns(self, transcript):
         """Two checkout turns on demo: the first fails a check, the second passes."""
         for index, (body, status) in enumerate((("let n = 2;", "fail"), ("let n = 3;", "pass"))):
@@ -252,4 +268,7 @@ class AuthoringTest(unittest.TestCase):
             self.assertEqual(first, claude.read_text())
             authoring.setup(self.root, disable=True)
         self.assertEqual(json.loads(claude.read_text()), original)
+        enabled = json.loads(first)["hooks"]
+        self.assertNotIn("Interrupt", enabled)
+        self.assertIn("SessionEnd", enabled)
         self.assertEqual(json.loads((config / "hooks.json").read_text()), {"hooks": {}})

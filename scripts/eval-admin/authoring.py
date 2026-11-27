@@ -22,7 +22,10 @@ PROJECT = Path(__file__).resolve().parents[2]
 WORKSHOP = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share")) / "vizint-workshop/workspaces"
 TAG = "vizint-authoring-hook"
 CLIENTS = ("codex", "claude")
-EVENTS = ("UserPromptSubmit", "PostToolUse", "Stop")
+# Stop skips interrupted turns. Interrupt (Codex) and SessionEnd close them at the moment they end.
+EVENTS = {"codex": ("UserPromptSubmit", "PostToolUse", "Stop", "Interrupt", "SessionEnd"),
+          "claude": ("UserPromptSubmit", "PostToolUse", "Stop", "SessionEnd")}
+CLOSING = ("Stop", "Interrupt", "SessionEnd")
 SOURCE = ("view.yml", "activity.html", "activity.css", "activity.js")
 WORKSHOP_SOURCE = ("viz.ts", "package.json", "view.tsx", "view.json")
 WORKSHOP_DIRS = ("files", "gestalts", "data")
@@ -246,7 +249,7 @@ def hook(root, client, payload):
             return
         if event == "PostToolUse":
             observe_tool(db, turn, work, payload, at)
-        if event == "Stop":
+        if event in CLOSING:
             stop_turn(db, root, turn, work, at)
 
 
@@ -319,14 +322,14 @@ def setup(root, disable=False):
             continue
         data = json.loads(path.read_text()) if path.exists() else {}
         hooks = data.setdefault("hooks", {})
-        for event in EVENTS:
+        for event in dict.fromkeys(name for names in EVENTS.values() for name in names):
             groups = hooks.get(event, [])
             kept = []
             for group in groups:
                 handlers = [handler for handler in group.get("hooks", []) if TAG not in handler.get("command", "")]
                 if handlers:
                     kept.append({**group, "hooks": handlers})
-            if not disable:
+            if not disable and event in EVENTS[client]:
                 command = shlex.join([sys.executable, str(script), TAG, client])
                 kept.append({"hooks": [{"type": "command", "command": command, "timeout": 5}]})
             if kept:

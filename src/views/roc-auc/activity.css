@@ -1,0 +1,42 @@
+main {
+  --accent: #00766c;
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(1rem, 3vw, 1.5rem);
+  max-width: 46rem;
+  margin: auto;
+}
+
+svg {
+  display: block;
+  width: 100%;
+  border-radius: .65rem;
+  background: #f3f8f8;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+path { vector-effect: non-scaling-stroke; }
+.grid { fill: none; stroke: #c9d9dc; }
+.diagonal { fill: none; stroke: #657680; stroke-dasharray: 5 4; }
+#roc-area { fill: #b9e1da; }
+#roc-curve { fill: none; stroke: var(--accent); stroke-width: 2.5; }
+#operating-point { fill: var(--accent); stroke: white; stroke-width: 2; }
+text { fill: #3d525d; }
+.x-tick, .axis-label { text-anchor: middle; }
+.y-tick { text-anchor: end; dominant-baseline: middle; }
+.axis-label { font-size: 14px; font-weight: 600; }
+
+.auc { margin: 0; color: var(--accent); font-size: 1.15rem; }
+.auc strong { margin-left: .25rem; font-size: 1.55rem; }
+.note { margin: .2rem 0 0; color: #3d525d; font-size: .875rem; }
+label, .rates span { display: flex; justify-content: space-between; gap: .5rem; }
+label { margin-top: 1rem; font-weight: 600; }
+input { display: block; width: 100%; margin: .4rem 0; accent-color: var(--accent); }
+.rates { display: grid; gap: .2rem; margin-top: 1rem; font-size: .875rem; }
+strong, #threshold-value { font-variant-numeric: tabular-nums; }
+
+@media (max-width: 36rem) {
+  main { grid-template-columns: 1fr; max-width: 26rem; }
+}
