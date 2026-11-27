@@ -1,0 +1,29 @@
+title: Cohen’s kappa (κ)
+intro: Edit how two raters classify the same items. Compare observed agreement
+  with the agreement expected from how often each rater uses each label.
+type: engagement
+frameHeight: 28rem
+previewReady: '#kappa[data-ready]'
+patterns: [editable-table, presets, bar-chart, live-readout]
+learning:
+  records:
+    - kind: topic
+      name: Cohen’s kappa
+    - kind: fact
+      key: cohens-kappa/chance-agreement
+      statement: Cohen’s kappa can differ at the same observed agreement because
+        expected agreement depends on each rater’s category frequencies.
+    - kind: question
+      id: 496cc04e-ed2f-4c57-8dd4-be72e90073ec
+      text: Why can two pairs of raters have the same observed agreement and different Cohen’s kappa values?
+  topicLinks:
+    - subject: {kind: topic, name: Cohen’s kappa}
+      relation: within
+      object: {kind: topic, name: statistics}
+  topics:
+    - target: {kind: topic, name: Cohen’s kappa}
+      weight: 1
+  teaches:
+    - target: {kind: fact, key: cohens-kappa/chance-agreement}
+  answers:
+    - target: {kind: question, id: 496cc04e-ed2f-4c57-8dd4-be72e90073ec}

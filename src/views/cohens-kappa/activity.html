@@ -1,0 +1,67 @@
+<main>
+  <div class="presets" role="group" aria-label="Rating examples">
+    <button type="button" data-preset="balanced" aria-pressed="true">Balanced</button>
+    <button type="button" data-preset="mostlyYes" aria-pressed="false">Mostly Yes</button>
+    <button type="button" data-preset="chance" aria-pressed="false">Chance-level</button>
+    <button type="button" data-preset="opposite" aria-pressed="false">Opposite</button>
+  </div>
+  <div class="workspace">
+    <section aria-labelledby="ratings">
+      <h2 id="ratings">Paired ratings</h2>
+      <p class="hint" id="edit-hint">Edit the number of items in each cell.</p>
+      <table aria-labelledby="ratings" aria-describedby="edit-hint">
+        <colgroup><col></colgroup><colgroup span="2"></colgroup><colgroup><col></colgroup>
+        <thead>
+          <tr><td></td><th scope="colgroup" colspan="2">Rater B</th><td></td></tr>
+          <tr>
+            <th scope="col">Rater A</th><th scope="col">Yes</th><th scope="col">No</th><th scope="col">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th scope="row">Yes</th>
+            <td><input class="both-yes" type="number" min="0" max="9999" step="1" required aria-label="Rater A Yes, Rater B Yes"></td>
+            <td><input type="number" min="0" max="9999" step="1" required aria-label="Rater A Yes, Rater B No"></td>
+            <td id="row-yes"></td>
+          </tr>
+          <tr>
+            <th scope="row">No</th>
+            <td><input type="number" min="0" max="9999" step="1" required aria-label="Rater A No, Rater B Yes"></td>
+            <td><input class="both-no" type="number" min="0" max="9999" step="1" required aria-label="Rater A No, Rater B No"></td>
+            <td id="row-no"></td>
+          </tr>
+        </tbody>
+        <tfoot>
+          <tr><th scope="row">Total</th><td id="col-yes"></td><td id="col-no"></td><td id="total"></td></tr>
+        </tfoot>
+      </table>
+      <p class="hint">The diagonal cells count items where both raters chose the same label.</p>
+      <p id="count-error" role="alert"></p>
+    </section>
+    <section class="analysis" aria-labelledby="kappa-title">
+      <h2 id="kappa-title">Cohen’s κ</h2>
+      <div role="status" aria-atomic="true">
+        <strong id="kappa"></strong>
+        <p id="interpretation"></p>
+      </div>
+      <figure aria-label="Observed and expected agreement">
+        <div class="measure">
+          <div>Observed agreement <strong id="observed"></strong></div>
+          <div class="track" id="observed-bar" role="img"><span class="both-yes"></span><span class="both-no"></span></div>
+        </div>
+        <div class="measure">
+          <div>Expected by chance <strong id="expected"></strong></div>
+          <div class="track" id="expected-bar" role="img"><span class="both-yes"></span><span class="both-no"></span></div>
+        </div>
+        <div class="axis" aria-hidden="true"><span>0%</span><span>100%</span></div>
+        <figcaption><span class="key yes">Both Yes</span><span class="key no">Both No</span></figcaption>
+      </figure>
+      <math display="block" aria-label="Kappa equals observed agreement minus expected agreement, divided by one minus expected agreement">
+        <mi>κ</mi><mo>=</mo><mfrac><mrow><msub><mi>p</mi><mi>o</mi></msub><mo>−</mo><msub><mi>p</mi><mi>e</mi></msub></mrow>
+        <mrow><mn>1</mn><mo>−</mo><msub><mi>p</mi><mi>e</mi></msub></mrow></mfrac>
+      </math>
+      <p class="hint formula-note"><i>p</i><sub>o</sub> is observed and <i>p</i><sub>e</sub> is expected.</p>
+    </section>
+  </div>
+  <p class="hint takeaway">Expected agreement multiplies the raters’ Yes rates and their No rates, then adds the two products. Compare <b>Balanced</b> and <b>Mostly Yes</b> to see how κ changes while observed agreement stays at 80%.</p>
+</main>
