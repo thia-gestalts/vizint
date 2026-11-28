@@ -5,3 +5,5 @@
 
 /scripts/eval-admin/.venv/
 /scripts/eval-admin/__pycache__/
+/scripts/cms/.venv/
+/scripts/cms/__pycache__/

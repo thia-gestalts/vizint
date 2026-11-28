@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import field, select, add, remove %}
+{% block title %}Topics · Vizint CMS{% endblock %}
+{% block content %}
+<datalist id="topic-names">{% for n in topic_names %}<option value="{{ n }}">{% endfor %}</datalist>
+<h1 class="mb-3 text-lg font-semibold">Topic pages <span class="text-slate-400">{{ pages|length }}</span></h1>
+<div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+  {% for page in pages %}{% set d = page.data %}
+  <section class="card">
+    <div class="flex items-center gap-2">
+      <div class="flex-1">{{ field('topic', page.slug, ['name'], d.name, rename='topic', cls='font-medium text-base') }}</div>
+      <code class="text-xs text-slate-400">{{ page.slug }}</code>
+      {% if page.id %}<a href="{{ learn_url(page.id) }}" target="_blank" class="text-xs text-sky-700">↗</a>{% endif %}
+    </div>
+    {{ field('topic', page.slug, ['intro'], d.intro, 'textarea', cls='text-slate-600') }}
+    <div class="label mt-2 mb-1 flex items-center gap-2">links
+      {{ add('topic', page.slug, ['links'], {'relation': 'within', 'target': {'kind': 'topic', 'name': ''}}, 'link', [['Broader topic for ' ~ d.name, ['target', 'name']]]) }}
+    </div>
+    {% for link in d.links or [] %}{% set p = ['links', loop.index0] %}
+      <div class="flex items-center gap-1">
+        <div class="w-28">{{ select('topic', page.slug, p + ['relation'], link.relation, ['within', 'related']) }}</div>
+        <div class="flex-1">{{ field('topic', page.slug, p + ['target', 'name'], link.target.name, list='topic-names') }}</div>
+        {{ remove('topic', page.slug, p, link, 'link') }}
+      </div>
+    {% endfor %}
+  </section>
+  {% endfor %}
+</div>
+
+<h2 class="mt-8 mb-3 text-lg font-semibold">All topics <span class="text-slate-400">{{ referenced|length }}</span></h2>
+<div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+<table class="w-full">
+  <thead class="bg-slate-50 text-left"><tr class="label"><th class="p-2">Name</th><th class="p-2">Used by</th><th class="p-2">Page</th></tr></thead>
+  <tbody>
+  {% for t in referenced %}
+    <tr class="border-t border-slate-100">
+      <td class="p-2"><a href="{{ learn_url(t.id) }}" target="_blank" class="hover:underline">{{ t.names|join(' · ') }}</a></td>
+      <td class="p-2">{% for v in t.views %}<a class="chip hover:!bg-sky-100" href="/views/{{ v }}">{{ v }}</a> {% endfor %}</td>
+      <td class="p-2">{% if t.page %}<code class="text-xs">topics/{{ t.page }}</code>{% else %}<span class="text-slate-400">–</span>{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="mt-2 text-xs text-slate-500">Rename a topic in a view's records or on its page to rename every reference to it in views and topic pages. Names in views built from <code>content.mjs</code> live in code or <code>learning.yml</code> and are not renamed.</p>
+{% endblock %}

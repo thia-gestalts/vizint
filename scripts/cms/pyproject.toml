@@ -1,0 +1,8 @@
+[project]
+name = "vizint-cms"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = ["flask>=3.1,<4", "ruamel.yaml>=0.18,<0.19"]
+
+[dependency-groups]
+dev = ["pytest>=8"]

@@ -1,0 +1,46 @@
+{#- Inline fields save on blur. `path` is a JSON path into the YAML file; `type` picks how the value is read. -#}
+{% macro attrs(file, slug, path, value, type='text', rename=None) -%}
+data-file="{{ file }}" data-slug="{{ slug }}" data-path='{{ path|tojson }}' data-value='{{ (value if value is defined else none)|tojson }}' data-type="{{ type }}"{% if rename %} data-rename="{{ rename }}"{% endif %}
+{%- endmacro %}
+
+{% macro field(file, slug, path, value, type='text', rename=None, placeholder='', cls='', list=None) -%}
+{%- set value = value if value is defined else none -%}
+{%- if type == 'textarea' -%}
+<textarea rows="1" class="field resize-none {{ cls }}" placeholder="{{ placeholder }}" {{ attrs(file, slug, path, value, type) }}>{{ value if value is not none else '' }}</textarea>
+{%- elif type == 'bool' -%}
+<input type="checkbox" class="h-4 w-4" {{ 'checked' if value }} {{ attrs(file, slug, path, value, type) }}>
+{%- elif type == 'list' -%}
+<input class="field {{ cls }}" placeholder="{{ placeholder or 'comma, separated' }}" value="{{ (value or [])|join(', ') }}" {{ attrs(file, slug, path, value, type) }}>
+{%- else -%}
+<input class="field {{ cls }}"{% if type == 'number' %} type="number" step="any"{% endif %}{% if list %} list="{{ list }}"{% endif %} placeholder="{{ placeholder }}" value="{{ value if value is not none else '' }}" {{ attrs(file, slug, path, value, type, rename) }}>
+{%- endif -%}
+{%- endmacro %}
+
+{% macro select(file, slug, path, value, choices, cls='') -%}
+<select class="field {{ cls }}" {{ attrs(file, slug, path, value) }}>
+  {% if value not in choices %}<option selected>{{ value }}</option>{% endif %}
+  {% for choice in choices %}<option {{ 'selected' if choice == value }}>{{ choice }}</option>{% endfor %}
+</select>
+{%- endmacro %}
+
+{#- A select whose options are JSON values, e.g. relation targets. -#}
+{% macro target_select(file, slug, path, value, options, current) -%}
+<select class="field" {{ attrs(file, slug, path, value, 'json') }}>
+  {% set ns = namespace(found=false) %}
+  {% for option in options %}
+    {% set hit = option.identity == current %}{% if hit %}{% set ns.found = true %}{% endif %}
+    <option value='{{ (value if hit else option.value)|tojson }}' {{ 'selected' if hit }}>{{ option.label }}</option>
+  {% endfor %}
+  {% if not ns.found %}<option value='{{ value|tojson }}' selected>⚠ undeclared · {{ value.name or value.key or value.id }}</option>{% endif %}
+</select>
+{%- endmacro %}
+
+{#- data-item is appended at data-path; each prompt [question, path] asks for a string first and stores it in the item. -#}
+{% macro add(file, slug, path, item, label, prompts=None) -%}
+<button class="btn" data-append data-file="{{ file }}" data-slug="{{ slug }}" data-path='{{ path|tojson }}' data-item='{{ item|tojson }}'
+  {%- if prompts %} data-prompts='{{ prompts|tojson }}'{% endif %}>+ {{ label }}</button>
+{%- endmacro %}
+
+{% macro remove(file, slug, path, value, what='this') -%}
+<button class="btn-x" title="Delete {{ what }}" data-delete data-file="{{ file }}" data-slug="{{ slug }}" data-path='{{ path|tojson }}' data-value='{{ value|tojson }}' data-what="{{ what }}">×</button>
+{%- endmacro %}

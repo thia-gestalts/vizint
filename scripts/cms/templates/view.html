@@ -1,0 +1,139 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import field, select, target_select, add, remove %}
+{% block title %}{{ data.title }} · Vizint CMS{% endblock %}
+
+{% macro records_table(prefix, records) %}
+<table class="w-full">
+  {% for r in records %}{% set p = prefix + ['records', loop.index0] %}
+  <tr class="border-t border-slate-100 align-top">
+    <td class="w-20 py-1"><span class="chip">{{ r.kind }}</span></td>
+    <td class="py-1">
+      {% if r.kind == 'topic' %}{{ field('view', slug, p + ['name'], r.name, rename='topic', cls='font-medium') }}
+      {% elif r.kind == 'skill' %}{{ field('view', slug, p + ['name'], r.name) }}
+      {% elif r.kind == 'fact' %}{{ field('view', slug, p + ['statement'], r.statement, 'textarea') }}
+      {% elif r.kind == 'question' %}{{ field('view', slug, p + ['text'], r.text, 'textarea') }}{% endif %}
+    </td>
+    <td class="w-72 py-1 text-xs text-slate-500">
+      {% if r.kind in ['fact', 'skill'] %}{{ field('view', slug, p + ['key'], r.key, rename=r.kind, cls='font-mono text-xs') }}
+      {% elif r.kind == 'question' %}<code class="px-1.5" title="Questions are referenced by UUID">{{ r.id }}</code>{% endif %}
+    </td>
+    <td class="w-8 py-1 text-right">{{ remove('view', slug, p, r, r.kind) }}</td>
+  </tr>
+  {% endfor %}
+</table>
+<div class="mt-2 flex gap-2">
+  {{ add('view', slug, prefix + ['records'], {'kind': 'topic', 'name': ''}, 'topic', [['Topic name', ['name']]]) }}
+  {{ add('view', slug, prefix + ['records'], {'kind': 'fact', 'key': slug ~ '/', 'statement': ''}, 'fact', [['Fact key', ['key']], ['Statement', ['statement']]]) }}
+  {{ add('view', slug, prefix + ['records'], {'kind': 'skill', 'key': slug ~ '/', 'name': ''}, 'skill', [['Skill key', ['key']], ['Skill name', ['name']]]) }}
+  {{ add('view', slug, prefix + ['records'], {'kind': 'question', 'id': '{uuid}', 'text': ''}, 'question', [['Question text', ['text']]]) }}
+</div>
+{% endmacro %}
+
+{% macro relations_block(prefix, block) %}
+<div class="mt-4 grid gap-3 md:grid-cols-2">
+  {% for rel in relations %}{% set items = block.get(rel) or [] %}
+    {% set suitable = options|selectattr('value.kind', 'in', wants[rel])|list %}
+    {% if items or suitable %}
+    <div>
+      <div class="label mb-1 flex items-center gap-2">{{ rel }}
+        {% if suitable %}{% set item = {'target': suitable[0].value} %}{% if rel == 'topics' %}{% set item = {'target': suitable[0].value, 'weight': 1} %}{% endif %}
+        {{ add('view', slug, prefix + [rel], item, 'add') }}{% endif %}
+      </div>
+      {% for it in items %}{% set p = prefix + [rel, loop.index0] %}
+        <div class="flex items-center gap-1">
+          <div class="flex-1">{{ target_select('view', slug, p + ['target'], it.target, options, identity(it.target)) }}</div>
+          {% if rel == 'topics' or 'weight' in it %}<div class="w-20">{{ field('view', slug, p + ['weight'], it.weight, 'number', placeholder='weight') }}</div>{% endif %}
+          {{ remove('view', slug, p, it, rel ~ ' link') }}
+        </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  {% endfor %}
+</div>
+{% endmacro %}
+
+{% block content %}
+<datalist id="topic-names">{% for n in topic_names %}<option value="{{ n }}">{% endfor %}</datalist>
+<div class="mb-4 flex items-center gap-3">
+  <a href="/" class="text-slate-500 hover:text-slate-800">← Views</a>
+  <h1 class="text-lg font-semibold">{{ data.title }}</h1>
+  <code class="text-slate-400">src/views/{{ slug }}/view.yml</code>
+  <a href="{{ site }}/{{ slug }}/" target="_blank" class="text-sky-700 hover:underline">open ↗</a>
+</div>
+
+<div class="grid gap-4 lg:grid-cols-[1fr_20rem]">
+  <section class="card">
+    <h2 class="label mb-2">Meta</h2>
+    <div class="grid grid-cols-[9rem_1fr] items-start gap-x-3 gap-y-1">
+      {% for key, type in [('title', 'text'), ('intro', 'textarea'), ('source', 'textarea'), ('frameHeight', 'text'), ('order', 'number'),
+                           ('activity', 'text'), ('patterns', 'list'), ('libraries', 'list'), ('previewReady', 'text'), ('previewHash', 'text'),
+                           ('media', 'bool'), ('collapseExercises', 'bool')] %}
+        <label class="pt-1 text-slate-500">{{ 'credit (source)' if key == 'source' else key }}</label>
+        <div>{{ field('view', slug, [key], data.get(key), type, placeholder='–') }}</div>
+        {% if key == 'intro' %}
+          <label class="pt-1 text-slate-500">type</label><div>{{ select('view', slug, ['type'], data.type, ['engagement', 'attempt']) }}</div>
+        {% endif %}
+      {% endfor %}
+      {% for key in ['sharedScript', 'learningModule'] if key in data %}
+        <span class="pt-1 text-slate-500">{{ key }}</span><code class="px-1.5 pt-1">{{ data[key] }}</code>
+      {% endfor %}
+      {% if data.datasets %}<span class="pt-1 text-slate-500">datasets</span>
+        <div class="px-1.5 pt-1">{% for name, slot in data.datasets.items() %}<div><b>{{ name }}</b> ({{ slot.kind }}): {{ slot.options|join(', ') }}</div>{% endfor %}</div>{% endif %}
+    </div>
+  </section>
+  <aside>
+    <img src="/preview/{{ slug }}.png" alt="" class="w-full rounded border border-slate-200 bg-white" onerror="this.remove()">
+  </aside>
+</div>
+
+{% if generated %}
+<section class="card mt-4">
+  <h2 class="label mb-2">Learning (generated by {{ data.learningModule }}, read-only)</h2>
+  {% for prefix, block in blocks %}
+    <div class="mb-3">
+      <b>{{ block.title or block.id or 'View' }}</b>
+      {% set recs = block.records or [] %}
+      <span class="text-slate-500">— {{ recs|length }} records</span>
+      <ul class="mt-1 columns-2 text-xs text-slate-600">
+        {% for r in recs[:24] %}<li><span class="chip">{{ r.kind }}</span> {{ r[labels[r.kind]] }}</li>{% endfor %}
+        {% if recs|length > 24 %}<li class="text-slate-400">… {{ recs|length - 24 }} more</li>{% endif %}
+      </ul>
+    </div>
+  {% endfor %}
+  {% if learning_yml %}<h3 class="label mt-3">src/views/{{ slug }}/learning.yml</h3><pre class="mt-1 max-h-96 overflow-auto rounded bg-slate-50 p-2 text-xs">{{ learning_yml }}</pre>{% endif %}
+</section>
+{% else %}
+<section class="card mt-4">
+  <h2 class="label mb-2">Records</h2>
+  {{ records_table(['learning'], learning.records or []) }}
+  {{ relations_block(['learning'], learning) }}
+
+  <h3 class="label mt-5 mb-1 flex items-center gap-2">topicLinks
+    {% set first = (learning.records or [])|selectattr('kind', 'eq', 'topic')|first %}
+    {% if first %}{{ add('view', slug, ['learning', 'topicLinks'], {'subject': {'kind': 'topic', 'name': first.name}, 'relation': 'within', 'object': {'kind': 'topic', 'name': ''}}, 'link', [['Broader topic for ' ~ first.name, ['object', 'name']]]) }}{% endif %}
+  </h3>
+  {% for link in learning.topicLinks or [] %}{% set p = ['learning', 'topicLinks', loop.index0] %}
+    <div class="flex items-center gap-1">
+      <div class="flex-1">{{ field('view', slug, p + ['subject', 'name'], link.subject.name, list='topic-names') }}</div>
+      <div class="w-28">{{ select('view', slug, p + ['relation'], link.relation, ['within', 'related']) }}</div>
+      <div class="flex-1">{{ field('view', slug, p + ['object', 'name'], link.object.name, list='topic-names') }}</div>
+      {{ remove('view', slug, p, link, 'topic link') }}
+    </div>
+  {% endfor %}
+</section>
+
+{% for prefix, block in blocks[1:] %}
+<section class="card mt-4">
+  <div class="mb-2 flex items-center gap-2">
+    <span class="label">exercise</span>
+    <div class="w-56">{{ field('view', slug, prefix + ['id'], block.id, cls='font-mono') }}</div>
+    <div class="flex-1">{{ field('view', slug, prefix + ['title'], block.title, cls='font-medium') }}</div>
+    {{ remove('view', slug, prefix, block, 'exercise') }}
+  </div>
+  {{ records_table(prefix, block.records or []) }}
+  {{ relations_block(prefix, block) }}
+</section>
+{% endfor %}
+<div class="mt-4">{{ add('view', slug, ['learning', 'exercises'], {'id': '', 'title': ''}, 'exercise', [['Exercise id (kebab-case)', ['id']], ['Exercise title', ['title']]]) }}</div>
+{% endif %}
+{% endblock %}

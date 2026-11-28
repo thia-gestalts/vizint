@@ -5,6 +5,10 @@ node = "26"
 description = "Build, then serve the site, eval dashboard and MCP endpoint (prints links and agent commands)"
 run = "scripts/dev.sh"
 
+[tasks.cms]
+description = "Serve the content admin for inline edits to view, topic and dataset YAML"
+run = "uv run --project scripts/cms --locked python scripts/cms/cms.py"
+
 [tasks.setup]
 description = "Install dependencies and build"
 run = ["npm ci", "npm run build"]

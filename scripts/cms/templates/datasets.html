@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% from 'macros.html' import field %}
+{% block title %}Datasets · Vizint CMS{% endblock %}
+{% block content %}
+<h1 class="mb-3 text-lg font-semibold">Datasets <span class="text-slate-400">{{ datasets|length }}</span></h1>
+<div class="grid gap-3 lg:grid-cols-2">
+  {% for ds in datasets %}{% set d = ds.data %}
+  <section class="card">
+    <div class="flex items-center gap-2">
+      <div class="flex-1">{{ field('dataset', ds.slug, ['title'], d.title, cls='font-medium text-base') }}</div>
+      <code class="text-xs text-slate-400">{{ ds.slug }}</code><span class="chip">{{ d.kind }}</span>
+    </div>
+    <div class="mt-2 grid grid-cols-[6rem_1fr] items-start gap-x-3 gap-y-1">
+      {% for key, type in [('source', 'textarea'), ('sourceUrl', 'text'), ('license', 'text'), ('licenseUrl', 'text'), ('notice', 'textarea')] %}
+        <label class="pt-1 text-slate-500">{{ key }}</label>
+        <div class="flex items-center gap-1">{{ field('dataset', ds.slug, [key], d.get(key), type, placeholder='–') }}
+          {% if key.endswith('Url') and d.get(key) %}<a href="{{ d[key] }}" target="_blank" rel="noreferrer" class="text-sky-700">↗</a>{% endif %}</div>
+      {% endfor %}
+      {% for key, value in d.items() if key not in ['title', 'kind', 'source', 'sourceUrl', 'license', 'licenseUrl', 'notice'] %}
+        <span class="pt-1 text-slate-500">{{ key }}</span>
+        <pre class="max-h-32 overflow-auto whitespace-pre-wrap px-1.5 pt-1 text-xs text-slate-500">{{ value|tojson(indent=1) }}</pre>
+      {% endfor %}
+    </div>
+  </section>
+  {% endfor %}
+</div>
+{% endblock %}
